@@ -3,17 +3,36 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import PasswordStrengthMeter, { getPasswordStrength } from "@/components/PasswordStrengthMeter";
+import { COUNTRY_CODES } from "@/lib/countryCodes";
 
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
 
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [countryIso, setCountryIso] = useState("US");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const dialCode = COUNTRY_CODES.find((c) => c.iso === countryIso)?.dial ?? "+1";
+
+  function resetForm() {
+    setFirstName("");
+    setLastName("");
+    setPhone("");
+    setPassword("");
+    setConfirmPassword("");
+    setError(null);
+    setMessage(null);
+  }
 
   async function handleGoogle() {
     setError(null);
@@ -29,13 +48,32 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setMessage(null);
-    setLoading(true);
 
     if (mode === "sign-up") {
+      if (!firstName.trim() || !lastName.trim()) {
+        setError("Please enter your first and last name.");
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError("Passwords do not match.");
+        return;
+      }
+      if (getPasswordStrength(password).score < 3) {
+        setError("Please choose a stronger password.");
+        return;
+      }
+
+      setLoading(true);
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
+          data: {
+            first_name: firstName.trim(),
+            last_name: lastName.trim(),
+            full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+            ...(phone.trim() ? { phone: `${dialCode} ${phone.trim()}` } : {}),
+          },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
@@ -48,6 +86,7 @@ export default function LoginPage() {
       return;
     }
 
+    setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
@@ -100,27 +139,107 @@ export default function LoginPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
+        {mode === "sign-up" ? (
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-charcoal/80 mb-1">First name</label>
+              <input
+                required
+                type="text"
+                autoComplete="given-name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="w-full rounded-lg border border-pine/20 px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-gold"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-charcoal/80 mb-1">Last name</label>
+              <input
+                required
+                type="text"
+                autoComplete="family-name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="w-full rounded-lg border border-pine/20 px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-gold"
+              />
+            </div>
+          </div>
+        ) : null}
+
         <div>
           <label className="block text-sm font-medium text-charcoal/80 mb-1">Email</label>
           <input
             required
             type="email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="w-full rounded-lg border border-pine/20 px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-gold"
           />
         </div>
+
+        {mode === "sign-up" ? (
+          <div>
+            <label className="block text-sm font-medium text-charcoal/80 mb-1">
+              Phone <span className="text-charcoal/40 font-normal">(optional)</span>
+            </label>
+            <div className="flex gap-2">
+              <select
+                value={countryIso}
+                onChange={(e) => setCountryIso(e.target.value)}
+                aria-label="Country code"
+                className="rounded-lg border border-pine/20 px-2 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-gold max-w-[7.5rem]"
+              >
+                {COUNTRY_CODES.map((c) => (
+                  <option key={c.iso} value={c.iso}>
+                    {c.iso} {c.dial}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel-national"
+                placeholder="555 123 4567"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full rounded-lg border border-pine/20 px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-gold"
+              />
+            </div>
+          </div>
+        ) : null}
+
         <div>
           <label className="block text-sm font-medium text-charcoal/80 mb-1">Password</label>
           <input
             required
             type="password"
-            minLength={6}
+            minLength={mode === "sign-up" ? 8 : 6}
+            autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full rounded-lg border border-pine/20 px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-gold"
           />
+          {mode === "sign-up" ? <PasswordStrengthMeter password={password} /> : null}
         </div>
+
+        {mode === "sign-up" ? (
+          <div>
+            <label className="block text-sm font-medium text-charcoal/80 mb-1">Confirm password</label>
+            <input
+              required
+              type="password"
+              minLength={8}
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full rounded-lg border border-pine/20 px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-gold"
+            />
+            {confirmPassword && confirmPassword !== password ? (
+              <p className="text-xs text-clay mt-1">Passwords don&apos;t match yet.</p>
+            ) : null}
+          </div>
+        ) : null}
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         {message ? <p className="text-sm text-pine">{message}</p> : null}
@@ -140,8 +259,7 @@ export default function LoginPage() {
           type="button"
           onClick={() => {
             setMode(mode === "sign-in" ? "sign-up" : "sign-in");
-            setError(null);
-            setMessage(null);
+            resetForm();
           }}
           className="text-pine font-medium hover:underline"
         >

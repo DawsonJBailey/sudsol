@@ -9,6 +9,11 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
+-- Added after the initial rollout; safe to re-run against an existing table.
+alter table public.profiles add column if not exists first_name text;
+alter table public.profiles add column if not exists last_name text;
+alter table public.profiles add column if not exists phone text;
+
 alter table public.profiles enable row level security;
 
 create policy "Users can view own profile" on public.profiles
@@ -27,19 +32,29 @@ with check ((select auth.uid()) = id);
 
 -- 2. Auto-create a profile row when a new auth user is created, pre-filled from
 -- Google's OAuth claims when present (raw_user_meta_data.full_name / avatar_url),
--- falling back to the raw OIDC claims (name / picture) for other providers.
+-- falling back to the raw OIDC claims (name / picture) for other providers, or to
+-- the first/last name and phone collected by the email/password sign-up form.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  meta jsonb := new.raw_user_meta_data;
 begin
-  insert into public.profiles (id, full_name, avatar_url)
+  insert into public.profiles (id, full_name, avatar_url, first_name, last_name, phone)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'name'),
-    coalesce(new.raw_user_meta_data ->> 'avatar_url', new.raw_user_meta_data ->> 'picture')
+    coalesce(
+      meta ->> 'full_name',
+      nullif(trim(concat_ws(' ', meta ->> 'first_name', meta ->> 'last_name')), ''),
+      meta ->> 'name'
+    ),
+    coalesce(meta ->> 'avatar_url', meta ->> 'picture'),
+    meta ->> 'first_name',
+    meta ->> 'last_name',
+    meta ->> 'phone'
   )
   on conflict (id) do nothing;
   return new;
