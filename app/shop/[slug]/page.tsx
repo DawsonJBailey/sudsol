@@ -21,11 +21,12 @@ export function generateStaticParams() {
   return Object.keys(categoryMeta).map((slug) => ({ slug }));
 }
 
-export default function CategoryPage({ params }: { params: { slug: string } }) {
-  const meta = categoryMeta[params.slug];
+export default async function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const meta = categoryMeta[slug];
   if (!meta) return notFound();
 
-  const items = products.filter((p) => p.category === params.slug);
+  const items = products.filter((p) => p.category === slug);
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-16">
