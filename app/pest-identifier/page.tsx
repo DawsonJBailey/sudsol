@@ -134,7 +134,7 @@ export default function PestIdentifierPage() {
                     Recommended: <span className="font-medium">{matchedProduct.name}</span>
                   </span>
                   <Link
-                    href="/pest-control"
+                    href={`/pest-control/${matchedProduct.slug}`}
                     className="text-sm font-medium text-gold hover:underline"
                   >
                     View treatment →

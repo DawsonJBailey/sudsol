@@ -78,6 +78,7 @@ export type ControlProduct = {
   activeIngredient: string;
   price: number;
   description: string;
+  image: { src: string; alt: string };
 };
 
 export const controlProducts: ControlProduct[] = [
@@ -88,6 +89,10 @@ export const controlProducts: ControlProduct[] = [
     price: 49.99,
     description:
       "A broad-spectrum liquid concentrate effective against chinch bugs, billbugs, spittlebugs, and armyworms. Mixes with water for lawn-wide application.",
+    image: {
+      src: "https://images.pexels.com/photos/4894608/pexels-photo-4894608.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      alt: "Person in protective gear applying liquid pesticide concentrate with a pump sprayer",
+    },
   },
   {
     slug: "clearlawn-spinosad",
@@ -96,6 +101,10 @@ export const controlProducts: ControlProduct[] = [
     price: 34.99,
     description:
       "A ready-to-spray treatment targeted at lawn caterpillars like sod webworms, formulated for lower impact on beneficial insects.",
+    image: {
+      src: "https://images.pexels.com/photos/13882449/pexels-photo-13882449.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      alt: "Person using a backpack sprayer to apply treatment across a green lawn",
+    },
   },
   {
     slug: "depthguard-grub-control",
@@ -104,5 +113,9 @@ export const controlProducts: ControlProduct[] = [
     price: 44.99,
     description:
       "A granular soil treatment for grub and mole cricket control, applied preventatively or at first signs of root-level damage.",
+    image: {
+      src: "https://images.pexels.com/photos/25974981/pexels-photo-25974981.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      alt: "Gloved hands holding a bag of granular soil treatment",
+    },
   },
 ];
