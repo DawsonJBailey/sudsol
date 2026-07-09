@@ -3,46 +3,88 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Product } from "@/lib/data";
+import type { Pest, ControlProduct } from "@/lib/pests";
 
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  imageUrl?: string;
   products?: Product[];
+  pest?: Pest | null;
+  controlProduct?: ControlProduct | null;
 };
+
+type PendingImage = { previewUrl: string; base64: string };
 
 const GREETING: ChatMessage = {
   role: "assistant",
   content:
-    "Hi! I can help you find the right sod, seed, or plugs. Tell me about your yard — sun or shade, how much traffic it gets, whether you want low maintenance or the best possible look, and if you're starting a new lawn or filling in bare spots.",
+    "Hi! I can help you find the right sod, seed, or plugs — or identify a lawn pest from a photo. Tell me about your yard (sun or shade, traffic, low maintenance vs. best look, new lawn vs. bare spots), or attach a photo of a bug or damaged patch.",
 };
 
 export default function LawnAssistant() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
   const [input, setInput] = useState("");
+  const [pendingImage, setPendingImage] = useState<PendingImage | null>(null);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(",")[1] ?? "";
+      setPendingImage({ previewUrl: dataUrl, base64 });
+    };
+    reader.readAsDataURL(file);
+  }
+
   async function sendMessage(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || loading) return;
+    if (loading || (!trimmed && !pendingImage)) return;
 
-    const nextMessages: ChatMessage[] = [...messages, { role: "user", content: trimmed }];
+    const image = pendingImage;
+
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: trimmed || (image ? "What lawn pest is this?" : ""),
+      imageUrl: image?.previewUrl,
+    };
+
+    const nextMessages: ChatMessage[] = [...messages, userMessage];
     setMessages(nextMessages);
     setInput("");
+    setPendingImage(null);
     setLoading(true);
 
     try {
+      const payloadMessages = nextMessages.map((m) => {
+        if (m.imageUrl && image && m === userMessage) {
+          return {
+            role: m.role,
+            content: [
+              { type: "text", text: m.content },
+              { type: "image", mediaType: "image/*", data: image.base64 },
+            ],
+          };
+        }
+        return { role: m.role, content: m.content };
+      });
+
       const res = await fetch("/api/lawn-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
-        }),
+        body: JSON.stringify({ messages: payloadMessages }),
       });
 
       const data = await res.json();
@@ -55,7 +97,16 @@ export default function LawnAssistant() {
         return;
       }
 
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply, products: data.products }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: data.reply,
+          products: data.products,
+          pest: data.pest,
+          controlProduct: data.controlProduct,
+        },
+      ]);
     } catch (err) {
       console.error(err);
       setMessages((prev) => [
@@ -92,7 +143,30 @@ export default function LawnAssistant() {
                       : "max-w-[90%] rounded-2xl rounded-bl-sm bg-white/70 border border-pine/10 text-charcoal px-3.5 py-2.5 text-sm whitespace-pre-line"
                   }
                 >
+                  {m.imageUrl && (
+                    <img
+                      src={m.imageUrl}
+                      alt="Uploaded pest photo"
+                      className="max-h-40 rounded-lg mb-2 object-contain"
+                    />
+                  )}
+
                   {m.content}
+
+                  {m.pest && (
+                    <div className="mt-3 rounded-xl bg-parchment border border-pine/10 px-3 py-2">
+                      <p className="font-medium text-pine text-sm">{m.pest.name}</p>
+                      <p className="text-xs text-charcoal/60 mt-0.5">{m.pest.damageSigns}</p>
+                      {m.controlProduct && (
+                        <Link
+                          href={`/pest-control/${m.controlProduct.slug}`}
+                          className="inline-block mt-2 text-xs font-medium text-gold hover:underline"
+                        >
+                          View {m.controlProduct.name} →
+                        </Link>
+                      )}
+                    </div>
+                  )}
 
                   {m.products && m.products.length > 0 && (
                     <div className="mt-3 space-y-2">
@@ -129,23 +203,57 @@ export default function LawnAssistant() {
               e.preventDefault();
               sendMessage(input);
             }}
-            className="flex items-center gap-2 border-t border-pine/10 bg-white/60 px-3 py-3"
+            className="border-t border-pine/10 bg-white/60 px-3 py-3"
           >
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask me for help…"
-              disabled={loading}
-              className="flex-1 rounded-full border border-pine/15 bg-white px-4 py-2 text-sm text-charcoal placeholder:text-charcoal/40 focus:outline-none focus:border-gold/50 disabled:opacity-60"
-            />
-            <button
-              type="submit"
-              disabled={loading || !input.trim()}
-              aria-label="Send message"
-              className="shrink-0 w-9 h-9 rounded-full bg-gold text-pine-dark flex items-center justify-center hover:bg-gold-light transition-colors disabled:opacity-40"
-            >
-              ➤
-            </button>
+            {pendingImage && (
+              <div className="flex items-center gap-2 mb-2">
+                <img
+                  src={pendingImage.previewUrl}
+                  alt="Selected photo preview"
+                  className="h-12 w-12 rounded-lg object-cover border border-pine/15"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPendingImage(null)}
+                  className="text-xs text-charcoal/50 hover:text-clay"
+                >
+                  Remove photo
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+                id="lawn-assistant-photo"
+              />
+              <label
+                htmlFor="lawn-assistant-photo"
+                aria-label="Attach a photo"
+                className="shrink-0 w-9 h-9 rounded-full border border-pine/15 bg-white flex items-center justify-center cursor-pointer hover:border-gold/50 transition-colors text-lg"
+              >
+                📷
+              </label>
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask me for help…"
+                disabled={loading}
+                className="flex-1 rounded-full border border-pine/15 bg-white px-4 py-2 text-sm text-charcoal placeholder:text-charcoal/40 focus:outline-none focus:border-gold/50 disabled:opacity-60"
+              />
+              <button
+                type="submit"
+                disabled={loading || (!input.trim() && !pendingImage)}
+                aria-label="Send message"
+                className="shrink-0 w-9 h-9 rounded-full bg-gold text-pine-dark flex items-center justify-center hover:bg-gold-light transition-colors disabled:opacity-40"
+              >
+                ➤
+              </button>
+            </div>
           </form>
         </div>
       )}

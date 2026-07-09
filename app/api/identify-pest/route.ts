@@ -1,45 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pests } from "@/lib/pests";
+import { SUPPORTED_IMAGE_MEDIA_TYPES, sniffImageMediaType } from "@/lib/image";
 
 export const runtime = "nodejs";
-
-const SUPPORTED_MEDIA_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
-
-// Browsers/OSes derive `file.type` from the file extension, which can lie
-// (e.g. a WebP saved with a .jpg name). Anthropic validates the real bytes,
-// so we sniff the actual format from the image's magic bytes instead of
-// trusting whatever media type the client sent.
-function sniffImageMediaType(buffer: Buffer): string | null {
-  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
-    return "image/jpeg";
-  }
-  if (
-    buffer.length >= 8 &&
-    buffer[0] === 0x89 &&
-    buffer[1] === 0x50 &&
-    buffer[2] === 0x4e &&
-    buffer[3] === 0x47
-  ) {
-    return "image/png";
-  }
-  if (
-    buffer.length >= 6 &&
-    buffer[0] === 0x47 &&
-    buffer[1] === 0x49 &&
-    buffer[2] === 0x46 &&
-    buffer[3] === 0x38
-  ) {
-    return "image/gif";
-  }
-  if (
-    buffer.length >= 12 &&
-    buffer.toString("ascii", 0, 4) === "RIFF" &&
-    buffer.toString("ascii", 8, 12) === "WEBP"
-  ) {
-    return "image/webp";
-  }
-  return null;
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -52,7 +15,7 @@ export async function POST(req: NextRequest) {
     const imageBuffer = Buffer.from(image, "base64");
     const mediaType = sniffImageMediaType(imageBuffer);
 
-    if (!mediaType || !SUPPORTED_MEDIA_TYPES.includes(mediaType as (typeof SUPPORTED_MEDIA_TYPES)[number])) {
+    if (!mediaType || !SUPPORTED_IMAGE_MEDIA_TYPES.includes(mediaType)) {
       return NextResponse.json(
         { error: "Unsupported image format. Please upload a JPEG, PNG, GIF, or WebP image." },
         { status: 400 }
