@@ -4,6 +4,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { CartProvider } from "@/components/CartContext";
 import ChunkErrorRecovery from "@/components/ChunkErrorRecovery";
+import LawnAssistant from "@/components/LawnAssistant";
 
 export const metadata: Metadata = {
   title: "Meridian Turf Co.",
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Header />
           <main className="flex-1">{children}</main>
           <Footer />
+          <LawnAssistant />
         </CartProvider>
       </body>
     </html>
