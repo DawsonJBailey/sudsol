@@ -3,6 +3,7 @@ import Link from "next/link";
 import { products, guides } from "@/lib/data";
 import ProductCard from "@/components/ProductCard";
 import HeroSlideshow from "@/components/HeroSlideshow";
+import NewsletterForm from "@/components/NewsletterForm";
 import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 
@@ -164,19 +165,7 @@ export default function HomePage() {
           <p className="text-charcoal/70 mb-6">
             One email a month — no spam, just what to do and when.
           </p>
-          <form className="flex flex-col sm:flex-row gap-3 justify-center max-w-md mx-auto">
-            <input
-              type="email"
-              placeholder="you@email.com"
-              className="flex-1 rounded-full border border-pine/20 px-5 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-gold"
-            />
-            <button
-              type="submit"
-              className="bg-pine text-parchment font-medium px-6 py-3 rounded-full hover:bg-pine-dark transition-colors"
-            >
-              Subscribe
-            </button>
-          </form>
+          <NewsletterForm />
         </div>
       </section>
     </div>

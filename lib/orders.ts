@@ -5,6 +5,7 @@ import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createClient as createServerSupabaseClient } from "@/utils/supabase/server";
 import { products } from "@/lib/data";
+import { upsertHubSpotContact } from "@/lib/hubspot";
 
 export type OrderItem = {
   slug: string;
@@ -105,6 +106,25 @@ export async function recordOrderForPaymentIntent(paymentIntentId: string): Prom
       .eq("stripe_payment_intent_id", paymentIntent.id)
       .maybeSingle();
     return (fallback as Order) ?? null;
+  }
+
+  // A completed purchase is the opposite of an abandoned cart: clear the
+  // shadow cart row and any HubSpot abandonment flag so this contact doesn't
+  // stay marked as having an abandoned cart, or get emailed about one later.
+  if (user?.id) {
+    await supabaseAdmin.from("carts").delete().eq("user_id", user.id);
+
+    if (user.email) {
+      try {
+        await upsertHubSpotContact({
+          email: user.email,
+          cart_abandoned_at: "",
+          abandoned_cart_summary: "",
+        });
+      } catch (err) {
+        console.error("Failed to clear HubSpot abandoned-cart flag:", err);
+      }
+    }
   }
 
   return inserted as Order;

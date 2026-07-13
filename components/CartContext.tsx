@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
+import { createClient } from "@/utils/supabase/client";
 
 export type CartItem = {
   slug: string;
@@ -21,10 +22,15 @@ type CartContextType = {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 const STORAGE_KEY = "meridian-turf-cart";
+// How long after the last change to wait before writing the cart to Supabase,
+// so rapid quantity clicks don't fire a request per click.
+const SYNC_DEBOUNCE_MS = 2000;
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const syncTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     try {
@@ -41,6 +47,44 @@ export function CartProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
     }
   }, [items, loaded]);
+
+  // Track the logged-in user so we know whose cart to mirror server-side.
+  // This shadow copy in Supabase (not localStorage) is what the abandoned-cart
+  // cron job queries, since it has no access to the browser's localStorage.
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserId(session?.user?.id ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!loaded || !userId) return;
+
+    if (syncTimeout.current) clearTimeout(syncTimeout.current);
+    syncTimeout.current = setTimeout(() => {
+      const supabase = createClient();
+      supabase
+        .from("carts")
+        .upsert({
+          user_id: userId,
+          items,
+          updated_at: new Date().toISOString(),
+          hubspot_synced_at: null,
+        })
+        .then(({ error }) => {
+          if (error) console.error("Failed to sync cart:", error);
+        });
+    }, SYNC_DEBOUNCE_MS);
+
+    return () => {
+      if (syncTimeout.current) clearTimeout(syncTimeout.current);
+    };
+  }, [items, loaded, userId]);
 
   function addItem(item: Omit<CartItem, "quantity">) {
     setItems((prev) => {
