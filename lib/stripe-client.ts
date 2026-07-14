@@ -1,3 +1,4 @@
+// PARKED: no longer imported — Stripe checkout replaced by Shopify hosted checkout (2026-07).
 import { loadStripe, Stripe } from "@stripe/stripe-js";
 
 let stripePromise: Promise<Stripe | null>;

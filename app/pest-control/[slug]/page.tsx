@@ -1,15 +1,25 @@
-import { controlProducts, pests } from "@/lib/pests";
+import { pests } from "@/lib/pests";
+import { getControlProductByHandle, getControlProducts } from "@/lib/shopify/catalog";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import AddToCartButton from "@/components/AddToCartButton";
 
-export function generateStaticParams() {
-  return controlProducts.map((p) => ({ slug: p.slug }));
+export const revalidate = 300;
+
+export async function generateStaticParams() {
+  try {
+    const products = await getControlProducts();
+    return products.map((p) => ({ slug: p.slug }));
+  } catch {
+    // Shopify not reachable at build time (e.g. tokens not set yet) —
+    // fall back to rendering these pages on demand.
+    return [];
+  }
 }
 
 export default async function PestControlProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const product = controlProducts.find((p) => p.slug === slug);
+  const product = await getControlProductByHandle(slug);
   if (!product) return notFound();
 
   const targetedPests = pests.filter((pest) => pest.controlSlug === product.slug);
@@ -41,7 +51,12 @@ export default async function PestControlProductPage({ params }: { params: Promi
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3 mb-8">
-            <AddToCartButton slug={product.slug} name={product.name} price={product.price} />
+            <AddToCartButton
+              slug={product.slug}
+              name={product.name}
+              price={product.price}
+              variantId={product.variantId}
+            />
           </div>
 
           <p className="text-charcoal/80 leading-relaxed mb-8">{product.description}</p>

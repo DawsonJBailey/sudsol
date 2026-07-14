@@ -1,15 +1,24 @@
-import { products } from "@/lib/data";
+import { getProductByHandle, getProductHandles } from "@/lib/shopify/catalog";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import AddToCartButton from "@/components/AddToCartButton";
 
-export function generateStaticParams() {
-  return products.map((p) => ({ slug: p.slug }));
+export const revalidate = 300;
+
+export async function generateStaticParams() {
+  try {
+    const handles = await getProductHandles();
+    return handles.map((slug) => ({ slug }));
+  } catch {
+    // Shopify not reachable at build time (e.g. tokens not set yet) —
+    // fall back to rendering product pages on demand.
+    return [];
+  }
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const product = products.find((p) => p.slug === slug);
+  const product = await getProductByHandle(slug);
   if (!product) return notFound();
 
   const specEntries = Object.entries(product.specs) as [string, string][];
@@ -48,7 +57,12 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3 mb-8">
-            <AddToCartButton slug={product.slug} name={product.name} price={product.priceFrom} />
+            <AddToCartButton
+              slug={product.slug}
+              name={product.name}
+              price={product.priceFrom}
+              variantId={product.variantId}
+            />
             <button className="w-full sm:w-auto bg-white border border-pine/20 text-pine font-medium px-8 py-3 rounded-full hover:border-pine/40 transition-colors">
               Check Availability by ZIP
             </button>

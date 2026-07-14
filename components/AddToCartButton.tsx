@@ -7,16 +7,18 @@ export default function AddToCartButton({
   slug,
   name,
   price,
+  variantId,
 }: {
   slug: string;
   name: string;
   price: number;
+  variantId: string;
 }) {
   const { addItem } = useCart();
   const [added, setAdded] = useState(false);
 
   function handleClick() {
-    addItem({ slug, name, price });
+    addItem({ slug, name, price, variantId });
     setAdded(true);
     setTimeout(() => setAdded(false), 1500);
   }

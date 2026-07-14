@@ -1,6 +1,8 @@
-import { products } from "@/lib/data";
+import { getProducts } from "@/lib/shopify/catalog";
 import ProductCard from "@/components/ProductCard";
 import { notFound } from "next/navigation";
+
+export const revalidate = 300;
 
 const categoryMeta: Record<string, { title: string; description: string }> = {
   sod: {
@@ -26,6 +28,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
   const meta = categoryMeta[slug];
   if (!meta) return notFound();
 
+  const products = await getProducts();
   const items = products.filter((p) => p.category === slug);
 
   return (

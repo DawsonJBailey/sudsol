@@ -6,7 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { useCart } from "./CartContext";
 import { createClient } from "@/utils/supabase/client";
-import SearchBar from "./SearchBar";
+import SearchBar, { type SearchProduct } from "./SearchBar";
 
 const navLinks = [
   { label: "Sod", href: "/shop/sod" },
@@ -22,8 +22,23 @@ type Profile = {
   avatar_url: string | null;
 };
 
-export default function Header() {
-  const { items, removeItem, updateQuantity, subtotal } = useCart();
+export default function Header({ searchProducts = [] }: { searchProducts?: SearchProduct[] }) {
+  const { items, removeItem, updateQuantity, subtotal, prepareCheckout } = useCart();
+  const [checkingOut, setCheckingOut] = useState(false);
+
+  async function handleCheckout() {
+    setCheckingOut(true);
+    try {
+      const url = await prepareCheckout();
+      if (url) {
+        window.location.assign(url);
+        return;
+      }
+    } catch (e) {
+      console.error("Checkout failed:", e);
+    }
+    setCheckingOut(false);
+  }
   const count = items.reduce((sum, i) => sum + i.quantity, 0);
   const router = useRouter();
   const pathname = usePathname();
@@ -108,7 +123,7 @@ export default function Header() {
           ))}
         </nav>
         <div className="flex items-center gap-4">
-          <SearchBar />
+          <SearchBar products={searchProducts} />
           <div className="relative" ref={cartRef}>
             <button
               type="button"
@@ -194,13 +209,14 @@ export default function Header() {
                         >
                           View Cart
                         </Link>
-                        <Link
-                          href="/checkout"
-                          onClick={() => setCartOpen(false)}
-                          className="flex-1 text-center rounded-full bg-pine text-parchment text-sm font-medium py-2 hover:bg-pine-dark transition-colors"
+                        <button
+                          type="button"
+                          onClick={handleCheckout}
+                          disabled={checkingOut}
+                          className="flex-1 text-center rounded-full bg-pine text-parchment text-sm font-medium py-2 hover:bg-pine-dark transition-colors disabled:opacity-60"
                         >
-                          Checkout
-                        </Link>
+                          {checkingOut ? "Opening…" : "Checkout"}
+                        </button>
                       </div>
                     </div>
                   </>

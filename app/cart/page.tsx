@@ -1,10 +1,27 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useCart } from "@/components/CartContext";
 
 export default function CartPage() {
-  const { items, removeItem, updateQuantity, subtotal } = useCart();
+  const { items, removeItem, updateQuantity, subtotal, prepareCheckout } = useCart();
+  const [redirecting, setRedirecting] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  async function handleCheckout() {
+    setRedirecting(true);
+    setCheckoutError(null);
+    try {
+      const url = await prepareCheckout();
+      if (!url) throw new Error("no checkout URL");
+      window.location.assign(url);
+    } catch (e) {
+      console.error("Checkout failed:", e);
+      setCheckoutError("Couldn't start checkout. Please try again in a moment.");
+      setRedirecting(false);
+    }
+  }
 
   if (items.length === 0) {
     return (
@@ -71,12 +88,16 @@ export default function CartPage() {
         <span className="text-lg font-semibold text-charcoal">${subtotal.toFixed(2)}</span>
       </div>
 
-      <Link
-        href="/checkout"
-        className="block w-full mt-6 bg-pine text-parchment font-medium py-3 rounded-full hover:bg-pine-dark transition-colors text-center"
+      <button
+        onClick={handleCheckout}
+        disabled={redirecting}
+        className="block w-full mt-6 bg-pine text-parchment font-medium py-3 rounded-full hover:bg-pine-dark transition-colors text-center disabled:opacity-60"
       >
-        Checkout
-      </Link>
+        {redirecting ? "Opening secure checkout…" : "Checkout"}
+      </button>
+      {checkoutError ? (
+        <p className="mt-3 text-sm text-clay text-center">{checkoutError}</p>
+      ) : null}
     </div>
   );
 }

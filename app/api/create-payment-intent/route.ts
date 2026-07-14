@@ -1,3 +1,13 @@
+import { NextResponse } from "next/server";
+
+// Checkout moved to Shopify's hosted checkout (started from the cart page).
+export async function POST() {
+  return NextResponse.json({ error: "Checkout has moved to Shopify" }, { status: 410 });
+}
+
+/* ── PARKED (Stripe → Shopify migration 2026-07). To restore: delete the
+   replacement above and uncomment this original Stripe handler. ──
+
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { products } from "@/lib/data";
@@ -40,3 +50,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ clientSecret: paymentIntent.client_secret });
 }
+
+── END PARKED ── */

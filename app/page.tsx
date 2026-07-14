@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { products, guides } from "@/lib/data";
+import { guides } from "@/lib/data";
+import { getProducts } from "@/lib/shopify/catalog";
 import ProductCard from "@/components/ProductCard";
 import HeroSlideshow from "@/components/HeroSlideshow";
 import NewsletterForm from "@/components/NewsletterForm";
@@ -37,7 +38,11 @@ const categories = [
   },
 ];
 
-export default function HomePage() {
+export const revalidate = 300;
+
+export default async function HomePage() {
+  const products = await getProducts();
+
   return (
     <div>
       {/* Hero */}

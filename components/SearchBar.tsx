@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { products, guides } from "@/lib/data";
+import { guides } from "@/lib/data";
+
+export type SearchProduct = { slug: string; name: string; tagline: string };
 
 type SearchResult = {
   type: "product" | "guide";
@@ -12,27 +14,32 @@ type SearchResult = {
   href: string;
 };
 
-const searchIndex: SearchResult[] = [
-  ...products.map((p) => ({
-    type: "product" as const,
-    slug: p.slug,
-    title: p.name,
-    subtitle: p.tagline,
-    href: `/product/${p.slug}`,
-  })),
-  ...guides.map((g) => ({
-    type: "guide" as const,
-    slug: g.slug,
-    title: g.title,
-    subtitle: g.excerpt,
-    href: `/guides/${g.slug}`,
-  })),
-];
+const guideIndex: SearchResult[] = guides.map((g) => ({
+  type: "guide" as const,
+  slug: g.slug,
+  title: g.title,
+  subtitle: g.excerpt,
+  href: `/guides/${g.slug}`,
+}));
 
-export default function SearchBar() {
+export default function SearchBar({ products = [] }: { products?: SearchProduct[] }) {
   const [query, setQuery] = useState("");
   const [resultsVisible, setResultsVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const searchIndex = useMemo<SearchResult[]>(
+    () => [
+      ...products.map((p) => ({
+        type: "product" as const,
+        slug: p.slug,
+        title: p.name,
+        subtitle: p.tagline,
+        href: `/product/${p.slug}`,
+      })),
+      ...guideIndex,
+    ],
+    [products]
+  );
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -42,7 +49,7 @@ export default function SearchBar() {
         (r) => r.title.toLowerCase().includes(q) || r.subtitle.toLowerCase().includes(q)
       )
       .slice(0, 8);
-  }, [query]);
+  }, [query, searchIndex]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

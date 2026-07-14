@@ -35,8 +35,7 @@ export default async function OrdersPage() {
       ) : (
         <div className="space-y-5">
           {orders.map((order) => {
-            const orderNumber = `MT-${order.stripe_payment_intent_id.slice(-6).toUpperCase()}`;
-            const date = new Date(order.created_at).toLocaleDateString(undefined, {
+            const date = new Date(order.createdAt).toLocaleDateString(undefined, {
               year: "numeric",
               month: "long",
               day: "numeric",
@@ -49,13 +48,11 @@ export default async function OrdersPage() {
               >
                 <div className="flex items-center justify-between px-5 py-4 border-b border-pine/10">
                   <div>
-                    <p className="font-medium text-charcoal">{orderNumber}</p>
+                    <p className="font-medium text-charcoal">{order.number}</p>
                     <p className="text-xs text-charcoal/50">{date}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-charcoal">
-                      ${(order.amount_total / 100).toFixed(2)}
-                    </p>
+                    <p className="font-semibold text-charcoal">${order.total.toFixed(2)}</p>
                     <p className="text-xs text-gold uppercase tracking-wide font-semibold">
                       {order.status}
                     </p>
@@ -64,13 +61,13 @@ export default async function OrdersPage() {
                 <div className="divide-y divide-pine/10">
                   {order.items.map((item) => (
                     <div
-                      key={item.slug}
+                      key={item.key}
                       className="flex justify-between px-5 py-3 text-sm text-charcoal/80"
                     >
                       <span>
                         {item.name} <span className="text-charcoal/50">× {item.quantity}</span>
                       </span>
-                      <span>${(item.price * item.quantity).toFixed(2)}</span>
+                      <span>${item.lineTotal.toFixed(2)}</span>
                     </div>
                   ))}
                 </div>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { recommendProducts, type LawnPreferences } from "@/lib/data";
+import { getProducts } from "@/lib/shopify/catalog";
 import { pests, controlProducts } from "@/lib/pests";
 import { SUPPORTED_IMAGE_MEDIA_TYPES, sniffImageMediaType } from "@/lib/image";
 
@@ -148,9 +149,11 @@ export async function POST(req: NextRequest) {
 
       if (toolUseBlocks.length === 0) break;
 
-      const toolResults = toolUseBlocks.map((block) => {
+      const toolResults = await Promise.all(toolUseBlocks.map(async (block) => {
         if (block.name === "recommend_products") {
-          recommended = recommendProducts((block.input ?? {}) as LawnPreferences);
+          // Same 5-minute fetch cache as the storefront pages.
+          const catalog = await getProducts();
+          recommended = recommendProducts((block.input ?? {}) as LawnPreferences, catalog);
           const payload = recommended.map((p) => ({
             slug: p.slug,
             name: p.name,
@@ -192,7 +195,7 @@ export async function POST(req: NextRequest) {
           tool_use_id: block.id,
           content: JSON.stringify({ message: "Unknown tool." }),
         };
-      });
+      }));
 
       anthropicMessages.push({ role: "assistant", content: data.content }, { role: "user", content: toolResults });
       data = await callAnthropic(apiKey, anthropicMessages);

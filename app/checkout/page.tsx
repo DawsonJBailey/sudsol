@@ -1,5 +1,29 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+// Checkout now starts from the cart page, which hands off to Shopify's hosted
+// checkout. This page only exists so old /checkout links and bookmarks still work.
+export default function CheckoutPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/cart");
+  }, [router]);
+
+  return (
+    <div className="max-w-3xl mx-auto px-6 py-24 text-center">
+      <p className="text-charcoal/60">Redirecting to your cart…</p>
+    </div>
+  );
+}
+
+/* ── PARKED (Stripe → Shopify migration 2026-07). To restore: delete the
+   replacement above and uncomment this original Stripe checkout page. ──
+
+"use client";
+
 import { useEffect, useState } from "react";
 import { Elements } from "@stripe/react-stripe-js";
 import { useCart } from "@/components/CartContext";
@@ -88,3 +112,5 @@ export default function CheckoutPage() {
     </div>
   );
 }
+
+── END PARKED ── */

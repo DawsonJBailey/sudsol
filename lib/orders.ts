@@ -1,11 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
-import Stripe from "stripe";
-import { stripe } from "@/lib/stripe";
-import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createClient as createServerSupabaseClient } from "@/utils/supabase/server";
-import { products } from "@/lib/data";
-import { upsertHubSpotContact } from "@/lib/hubspot";
+import { getShopifyOrdersByEmail } from "@/lib/shopify/orders";
 
 export type OrderItem = {
   slug: string;
@@ -27,6 +23,89 @@ export type Order = {
   items: OrderItem[];
   created_at: string;
 };
+
+/** Provider-agnostic shape the orders page renders. */
+export type DisplayOrder = {
+  id: string;
+  number: string;
+  createdAt: string;
+  status: string;
+  /** Order total in dollars. */
+  total: number;
+  items: { key: string; name: string; quantity: number; lineTotal: number }[];
+};
+
+/**
+ * All orders for the signed-in user: Shopify-checkout orders (matched by the
+ * user's email) plus historical Stripe-era orders recorded in Supabase.
+ */
+export async function getOrdersForCurrentUser(): Promise<DisplayOrder[]> {
+  const cookieStore = await cookies();
+  const supabase = createServerSupabaseClient(cookieStore);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return [];
+
+  const [legacy, shopify] = await Promise.all([
+    supabase
+      .from("orders")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .then(({ data, error }) => (error ? [] : (data as Order[]))),
+    user.email
+      ? getShopifyOrdersByEmail(user.email).catch((err) => {
+          console.error("Failed to fetch Shopify orders:", err);
+          return [];
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const displayOrders: DisplayOrder[] = [
+    ...shopify.map((order) => ({
+      id: order.id,
+      number: order.name,
+      createdAt: order.createdAt,
+      status: order.financialStatus,
+      total: order.total,
+      items: order.items.map((item, i) => ({
+        key: `${item.title}-${i}`,
+        name: item.title,
+        quantity: item.quantity,
+        lineTotal: item.lineTotal,
+      })),
+    })),
+    ...legacy.map((order) => ({
+      id: order.id,
+      number: `MT-${order.stripe_payment_intent_id.slice(-6).toUpperCase()}`,
+      createdAt: order.created_at,
+      status: order.status,
+      total: order.amount_total / 100,
+      items: order.items.map((item) => ({
+        key: item.slug,
+        name: item.name,
+        quantity: item.quantity,
+        lineTotal: item.price * item.quantity,
+      })),
+    })),
+  ];
+
+  return displayOrders.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
+/* ── PARKED (Stripe → Shopify migration 2026-07). To restore Stripe order
+   recording: uncomment this block (and its imports) and restore the call in
+   app/order-confirmation/page.tsx. ──
+
+import Stripe from "stripe";
+import { stripe } from "@/lib/stripe";
+import { supabaseAdmin } from "@/lib/supabase-admin";
+import { products } from "@/lib/data";
+import { upsertHubSpotContact } from "@/lib/hubspot";
 
 function buildItemsFromMetadata(metadata: Stripe.Metadata): OrderItem[] {
   let cart: { slug: string; quantity: number }[] = [];
@@ -50,10 +129,8 @@ function buildItemsFromMetadata(metadata: Stripe.Metadata): OrderItem[] {
     .filter((item): item is OrderItem => item !== null);
 }
 
-/**
- * Verifies a PaymentIntent with Stripe and records it as an order (idempotent
- * on stripe_payment_intent_id). Returns null if the payment didn't succeed.
- */
+// Verifies a PaymentIntent with Stripe and records it as an order (idempotent
+// on stripe_payment_intent_id). Returns null if the payment didn't succeed.
 export async function recordOrderForPaymentIntent(paymentIntentId: string): Promise<Order | null> {
   const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
     expand: ["payment_method"],
@@ -130,21 +207,4 @@ export async function recordOrderForPaymentIntent(paymentIntentId: string): Prom
   return inserted as Order;
 }
 
-export async function getOrdersForCurrentUser(): Promise<Order[]> {
-  const cookieStore = await cookies();
-  const supabase = createServerSupabaseClient(cookieStore);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return [];
-
-  const { data, error } = await supabase
-    .from("orders")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
-
-  if (error) return [];
-  return data as Order[];
-}
+── END PARKED ── */
