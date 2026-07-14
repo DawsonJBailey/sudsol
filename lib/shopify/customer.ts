@@ -237,6 +237,8 @@ export type CustomerOrder = {
   processedAt: string;
   financialStatus: string;
   total: number;
+  /** Shopify-hosted order status/details page for this order. */
+  statusPageUrl: string;
   items: { key: string; name: string; quantity: number; lineTotal: number }[];
 };
 
@@ -249,6 +251,7 @@ export async function getCustomerOrders(accessToken: string): Promise<CustomerOr
           name: string;
           processedAt: string;
           financialStatus: string | null;
+          statusPageUrl: string;
           totalPrice: { amount: string };
           lineItems: {
             nodes: { id: string; name: string; quantity: number; price: { amount: string } | null }[];
@@ -267,6 +270,7 @@ export async function getCustomerOrders(accessToken: string): Promise<CustomerOr
               name
               processedAt
               financialStatus
+              statusPageUrl
               totalPrice {
                 amount
               }
@@ -292,6 +296,7 @@ export async function getCustomerOrders(accessToken: string): Promise<CustomerOr
     name: order.name,
     processedAt: order.processedAt,
     financialStatus: (order.financialStatus ?? "PAID").toLowerCase().replace(/_/g, " "),
+    statusPageUrl: order.statusPageUrl,
     total: Number(order.totalPrice.amount),
     items: order.lineItems.nodes.map((item) => ({
       key: item.id,

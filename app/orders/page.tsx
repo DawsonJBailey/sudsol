@@ -43,13 +43,20 @@ export default async function OrdersPage() {
             });
 
             return (
-              <div
+              <a
                 key={order.id}
-                className="rounded-2xl border border-pine/10 bg-white/60 overflow-hidden"
+                href={order.statusPageUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block rounded-2xl border border-pine/10 bg-white/60 overflow-hidden transition-shadow hover:shadow-md hover:border-pine/25 focus:outline-none focus:ring-2 focus:ring-gold"
+                aria-label={`View details for order ${order.name}`}
               >
                 <div className="flex items-center justify-between px-5 py-4 border-b border-pine/10">
                   <div>
-                    <p className="font-medium text-charcoal">{order.name}</p>
+                    <p className="font-medium text-charcoal">
+                      {order.name}
+                      <span className="ml-2 text-xs text-charcoal/40">↗ view details</span>
+                    </p>
                     <p className="text-xs text-charcoal/50">{date}</p>
                   </div>
                   <div className="text-right">
@@ -72,7 +79,7 @@ export default async function OrdersPage() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </a>
             );
           })}
         </div>
