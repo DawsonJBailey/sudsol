@@ -1,9 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
-import { createClient } from "@/utils/supabase/client";
 import {
-  cartBuyerIdentityUpdate,
   cartCreate,
   cartGet,
   cartLinesAdd,
@@ -37,19 +35,14 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 const STORAGE_KEY = "meridian-turf-cart";
 const CART_ID_KEY = "meridian-turf-cart-id";
-// How long after the last change to wait before writing the cart to Supabase,
-// so rapid quantity clicks don't fire a request per click.
-const SYNC_DEBOUNCE_MS = 2000;
-// Same idea for Shopify quantity updates.
+// How long after the last quantity click to wait before writing to Shopify,
+// so rapid clicks don't fire a request per click.
 const SHOPIFY_UPDATE_DEBOUNCE_MS = 600;
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-  const userEmailRef = useRef<string | null>(null);
   const [pendingOps, setPendingOps] = useState(0);
-  const syncTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Local state is the rendering source of truth (optimistic UI); every change
   // is serialized through opQueue so Shopify mutations apply in click order.
@@ -156,48 +149,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [items, loaded]);
 
-  // Track the logged-in user so we know whose cart to mirror server-side.
-  // This shadow copy in Supabase (not localStorage) is what the abandoned-cart
-  // cron job queries, since it has no access to the browser's localStorage.
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
-      userEmailRef.current = data.user?.email ?? null;
-    });
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserId(session?.user?.id ?? null);
-      userEmailRef.current = session?.user?.email ?? null;
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!loaded || !userId) return;
-
-    if (syncTimeout.current) clearTimeout(syncTimeout.current);
-    syncTimeout.current = setTimeout(() => {
-      const supabase = createClient();
-      supabase
-        .from("carts")
-        .upsert({
-          user_id: userId,
-          items,
-          updated_at: new Date().toISOString(),
-          hubspot_synced_at: null,
-        })
-        .then(({ error }) => {
-          if (error) console.error("Failed to sync cart:", error);
-        });
-    }, SYNC_DEBOUNCE_MS);
-
-    return () => {
-      if (syncTimeout.current) clearTimeout(syncTimeout.current);
-    };
-  }, [items, loaded, userId]);
-
   function addItem(item: Omit<CartItem, "quantity">) {
     setItems((prev) => {
       const existing = prev.find((i) => i.slug === item.slug);
@@ -275,15 +226,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
     flushQuantityUpdates();
     await opQueue.current;
 
-    // Best effort: attach the signed-in email so checkout is prefilled and
-    // the order shows up on /orders for this account.
+    // Best effort: associate the signed-in customer server-side so hosted
+    // checkout opens already authenticated. No-op when signed out.
     const cartId = cartIdRef.current;
-    const email = userEmailRef.current;
-    if (cartId && email) {
+    if (cartId) {
       try {
-        applyCartMeta(await cartBuyerIdentityUpdate(cartId, email));
+        const res = await fetch("/api/cart/attach-buyer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cartId }),
+        });
+        const data = (await res.json()) as { attached?: boolean; checkoutUrl?: string };
+        if (data.checkoutUrl) {
+          checkoutUrlRef.current = data.checkoutUrl;
+        }
       } catch (err) {
-        console.error("Failed to set cart buyer identity:", err);
+        console.error("Failed to attach buyer to cart:", err);
       }
     }
 

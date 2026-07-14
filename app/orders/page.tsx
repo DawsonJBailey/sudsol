@@ -1,21 +1,22 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import { createClient as createServerSupabaseClient } from "@/utils/supabase/server";
-import { getOrdersForCurrentUser } from "@/lib/orders";
+import { getCustomerSession, getCustomerOrders, type CustomerOrder } from "@/lib/shopify/customer";
+
+export const dynamic = "force-dynamic";
 
 export default async function OrdersPage() {
-  const cookieStore = await cookies();
-  const supabase = createServerSupabaseClient(cookieStore);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const session = await getCustomerSession();
+  if (!session) {
     redirect("/login");
   }
 
-  const orders = await getOrdersForCurrentUser();
+  let orders: CustomerOrder[] = [];
+  try {
+    orders = await getCustomerOrders(session.accessToken);
+  } catch (err) {
+    console.error("Failed to load customer orders:", err);
+    redirect("/login");
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-16">
@@ -35,7 +36,7 @@ export default async function OrdersPage() {
       ) : (
         <div className="space-y-5">
           {orders.map((order) => {
-            const date = new Date(order.createdAt).toLocaleDateString(undefined, {
+            const date = new Date(order.processedAt).toLocaleDateString(undefined, {
               year: "numeric",
               month: "long",
               day: "numeric",
@@ -48,13 +49,13 @@ export default async function OrdersPage() {
               >
                 <div className="flex items-center justify-between px-5 py-4 border-b border-pine/10">
                   <div>
-                    <p className="font-medium text-charcoal">{order.number}</p>
+                    <p className="font-medium text-charcoal">{order.name}</p>
                     <p className="text-xs text-charcoal/50">{date}</p>
                   </div>
                   <div className="text-right">
                     <p className="font-semibold text-charcoal">${order.total.toFixed(2)}</p>
                     <p className="text-xs text-gold uppercase tracking-wide font-semibold">
-                      {order.status}
+                      {order.financialStatus}
                     </p>
                   </div>
                 </div>

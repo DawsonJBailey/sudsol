@@ -2,10 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
-import type { User } from "@supabase/supabase-js";
+import { usePathname } from "next/navigation";
 import { useCart } from "./CartContext";
-import { createClient } from "@/utils/supabase/client";
 import SearchBar, { type SearchProduct } from "./SearchBar";
 
 const navLinks = [
@@ -17,9 +15,10 @@ const navLinks = [
   { label: "Contact Us", href: "/contact" },
 ];
 
-type Profile = {
-  full_name: string | null;
-  avatar_url: string | null;
+type Me = {
+  signedIn: boolean;
+  email?: string | null;
+  firstName?: string | null;
 };
 
 export default function Header({ searchProducts = [] }: { searchProducts?: SearchProduct[] }) {
@@ -40,39 +39,28 @@ export default function Header({ searchProducts = [] }: { searchProducts?: Searc
     setCheckingOut(false);
   }
   const count = items.reduce((sum, i) => sum + i.quantity, 0);
-  const router = useRouter();
   const pathname = usePathname();
-  const supabase = createClient();
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [me, setMe] = useState<Me>({ signedIn: false });
   const [menuOpen, setMenuOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const cartRef = useRef<HTMLDivElement>(null);
 
+  // Re-fetch on navigation so profile edits and sign-in/out show up promptly.
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-    return () => subscription.unsubscribe();
-  }, [supabase]);
-
-  useEffect(() => {
-    if (!user) {
-      setProfile(null);
-      return;
-    }
-    supabase
-      .from("profiles")
-      .select("full_name, avatar_url")
-      .eq("id", user.id)
-      .single()
-      .then(({ data }) => setProfile(data));
-    // Re-fetch on navigation so edits made on /profile show up as soon as you leave the page.
-  }, [supabase, user, pathname]);
+    let cancelled = false;
+    fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then((data: Me) => {
+        if (!cancelled) setMe(data);
+      })
+      .catch(() => {
+        if (!cancelled) setMe({ signedIn: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -91,16 +79,13 @@ export default function Header({ searchProducts = [] }: { searchProducts?: Searc
     setCartOpen(false);
   }, [pathname]);
 
-  async function handleSignOut() {
+  function handleSignOut() {
     setMenuOpen(false);
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    // Server route clears cookies and ends the Shopify customer session.
+    window.location.assign("/auth/logout");
   }
 
-  const initial = (profile?.full_name || user?.email || "?")
-    .charAt(0)
-    .toUpperCase();
+  const initial = (me.firstName || me.email || "?").charAt(0).toUpperCase();
 
   return (
     <header className="border-b border-pine/10 bg-parchment sticky top-0 z-30">
@@ -224,7 +209,7 @@ export default function Header({ searchProducts = [] }: { searchProducts?: Searc
               </div>
             ) : null}
           </div>
-          {user ? (
+          {me.signedIn ? (
             <div className="relative" ref={menuRef}>
               <button
                 type="button"
@@ -232,18 +217,9 @@ export default function Header({ searchProducts = [] }: { searchProducts?: Searc
                 className="block h-9 w-9 rounded-full overflow-hidden border border-pine/20 hover:ring-2 hover:ring-gold transition-shadow"
                 aria-label="Account menu"
               >
-                {profile?.avatar_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={profile.avatar_url}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <span className="flex h-full w-full items-center justify-center bg-pine text-parchment text-sm font-medium">
-                    {initial}
-                  </span>
-                )}
+                <span className="flex h-full w-full items-center justify-center bg-pine text-parchment text-sm font-medium">
+                  {initial}
+                </span>
               </button>
               {menuOpen ? (
                 <div className="absolute right-0 mt-2 w-44 rounded-lg border border-pine/10 bg-white shadow-lg py-1 z-40">

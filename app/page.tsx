@@ -5,8 +5,6 @@ import { getProducts } from "@/lib/shopify/catalog";
 import ProductCard from "@/components/ProductCard";
 import HeroSlideshow from "@/components/HeroSlideshow";
 import NewsletterForm from "@/components/NewsletterForm";
-import { createClient } from "@/utils/supabase/server";
-import { cookies } from "next/headers";
 
 const categories = [
   {

@@ -140,27 +140,6 @@ export async function cartLinesUpdate(
   return unwrapCart("cartLinesUpdate", data.cartLinesUpdate);
 }
 
-/**
- * Attaches the signed-in user's email to the cart so hosted checkout prefills
- * it and the resulting order can be matched back to the account on /orders.
- */
-export async function cartBuyerIdentityUpdate(cartId: string, email: string): Promise<ShopifyCart> {
-  const data = await storefrontFetch<{ cartBuyerIdentityUpdate: CartPayload }>({
-    query: /* GraphQL */ `
-      mutation CartBuyerIdentityUpdate($cartId: ID!, $buyerIdentity: CartBuyerIdentityInput!) {
-        cartBuyerIdentityUpdate(cartId: $cartId, buyerIdentity: $buyerIdentity) {
-          cart { ...CartFields }
-          userErrors { message }
-        }
-      }
-      ${CART_FRAGMENT}
-    `,
-    variables: { cartId, buyerIdentity: { email } },
-    revalidate: false,
-  });
-  return unwrapCart("cartBuyerIdentityUpdate", data.cartBuyerIdentityUpdate);
-}
-
 export async function cartLinesRemove(cartId: string, lineIds: string[]): Promise<ShopifyCart> {
   const data = await storefrontFetch<{ cartLinesRemove: CartPayload }>({
     query: /* GraphQL */ `
