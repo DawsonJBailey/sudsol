@@ -6,10 +6,14 @@ import { usePathname } from "next/navigation";
 import { useCart } from "./CartContext";
 import SearchBar, { type SearchProduct } from "./SearchBar";
 
-const navLinks = [
+const shopLinks = [
   { label: "Sod", href: "/shop/sod" },
   { label: "Seed", href: "/shop/seed" },
   { label: "Plugs", href: "/shop/plugs" },
+  { label: "Pest Control", href: "/pest-control" },
+];
+
+const navLinks = [
   { label: "Guides", href: "/guides" },
   { label: "Pest ID", href: "/pest-identifier" },
   { label: "Contact Us", href: "/contact" },
@@ -97,6 +101,27 @@ export default function Header({ searchProducts = [] }: { searchProducts?: Searc
           Meridian Turf Co.
         </Link>
         <nav className="hidden md:flex gap-8">
+          <div className="relative group">
+            <button
+              type="button"
+              className="text-charcoal/80 hover:text-pine font-medium transition-colors"
+            >
+              Shop
+            </button>
+            <div className="absolute left-0 top-full pt-2 hidden group-hover:block">
+              <div className="w-44 rounded-lg border border-pine/10 bg-white shadow-lg py-1 z-40">
+                {shopLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="block px-4 py-2 text-sm text-charcoal/80 hover:bg-parchment hover:text-pine"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
           {navLinks.map((link) => (
             <Link
               key={link.href}

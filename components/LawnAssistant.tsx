@@ -18,9 +18,16 @@ type PendingImage = { previewUrl: string; base64: string };
 
 const GREETING: ChatMessage = {
   role: "assistant",
-  content:
-    "Hi! I can help you find the right sod, seed, or plugs — or identify a lawn pest from a photo. Tell me about your yard (sun or shade, traffic, low maintenance vs. best look, new lawn vs. bare spots), or attach a photo of a bug or damaged patch.",
+  content: "Hi! I can help with lawn care, products, and how-tos. Choose a suggestion or type below.",
 };
+
+const SUGGESTIONS = [
+  "What grass type fits my climate?",
+  "How do I fix brown or thin spots?",
+  "Help me plan a fertilizer schedule",
+  "Sod vs seed for my yard - what should I pick?",
+  "Where can I shop lawn products?",
+];
 
 export default function LawnAssistant() {
   const [open, setOpen] = useState(false);
@@ -194,6 +201,21 @@ export default function LawnAssistant() {
                 <div className="rounded-2xl rounded-bl-sm bg-white/70 border border-pine/10 text-charcoal/50 px-3.5 py-2.5 text-sm">
                   Thinking…
                 </div>
+              </div>
+            )}
+
+            {messages.length === 1 && !loading && (
+              <div className="flex flex-col items-center gap-2 pt-2">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => sendMessage(s)}
+                    className="w-full rounded-full border border-pine/15 bg-white/70 px-4 py-2 text-sm text-pine text-center hover:border-gold/50 hover:bg-white transition-colors"
+                  >
+                    {s}
+                  </button>
+                ))}
               </div>
             )}
           </div>

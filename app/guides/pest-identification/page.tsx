@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { pests, controlProducts } from "@/lib/pests";
 
@@ -31,34 +32,47 @@ export default function PestIdentificationPage() {
               key={pest.slug}
               className="rounded-2xl bg-white/60 border border-pine/10 p-6 md:p-8"
             >
-              <h2 className="font-display text-xl text-pine mb-3">{pest.name}</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gold font-semibold mb-1">
-                    Identification
-                  </p>
-                  <p className="text-sm text-charcoal/80 leading-relaxed">{pest.identification}</p>
+              <div className="flex flex-col sm:flex-row gap-6">
+                <div className="relative w-full h-48 sm:w-40 sm:h-40 flex-shrink-0 rounded-xl overflow-hidden bg-pine/5">
+                  <Image
+                    src={pest.image.src}
+                    alt={pest.image.alt}
+                    fill
+                    sizes="(min-width: 640px) 160px, 100vw"
+                    className="object-cover"
+                  />
                 </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gold font-semibold mb-1">
-                    Damage Signs
-                  </p>
-                  <p className="text-sm text-charcoal/80 leading-relaxed">{pest.damageSigns}</p>
+                <div className="flex-1">
+                  <h2 className="font-display text-xl text-pine mb-3">{pest.name}</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-gold font-semibold mb-1">
+                        Identification
+                      </p>
+                      <p className="text-sm text-charcoal/80 leading-relaxed">{pest.identification}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-gold font-semibold mb-1">
+                        Damage Signs
+                      </p>
+                      <p className="text-sm text-charcoal/80 leading-relaxed">{pest.damageSigns}</p>
+                    </div>
+                  </div>
+                  {product && (
+                    <div className="flex items-center justify-between border-t border-pine/10 pt-4 mt-4">
+                      <span className="text-sm text-charcoal/70">
+                        Recommended treatment: <span className="font-medium text-charcoal">{product.name}</span>
+                      </span>
+                      <Link
+                        href="/pest-control"
+                        className="text-sm font-medium text-gold hover:underline"
+                      >
+                        View treatment →
+                      </Link>
+                    </div>
+                  )}
                 </div>
               </div>
-              {product && (
-                <div className="flex items-center justify-between border-t border-pine/10 pt-4 mt-4">
-                  <span className="text-sm text-charcoal/70">
-                    Recommended treatment: <span className="font-medium text-charcoal">{product.name}</span>
-                  </span>
-                  <Link
-                    href="/pest-control"
-                    className="text-sm font-medium text-gold hover:underline"
-                  >
-                    View treatment →
-                  </Link>
-                </div>
-              )}
             </div>
           );
         })}

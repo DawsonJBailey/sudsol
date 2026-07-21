@@ -4,6 +4,7 @@ export type Pest = {
   identification: string;
   damageSigns: string;
   controlSlug: string;
+  image: { src: string; alt: string };
 };
 
 export const pests: Pest[] = [
@@ -15,6 +16,10 @@ export const pests: Pest[] = [
     damageSigns:
       "Damage often gets mistaken for drought stress: irregular yellow-to-brown patches, usually starting near sidewalks, driveways, or other hot, dry edges of the lawn.",
     controlSlug: "shieldpro-bifenthrin",
+    image: {
+      src: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/Hairy_Chinch_Bug_-_Blissus_leucopteru_%2850594763067%29.jpg/960px-Hairy_Chinch_Bug_-_Blissus_leucopteru_%2850594763067%29.jpg",
+      alt: "Close-up of a hairy chinch bug (Blissus leucopterus) on a blade of grass",
+    },
   },
   {
     slug: "sod-webworms",
@@ -24,6 +29,10 @@ export const pests: Pest[] = [
     damageSigns:
       "Grass blades take on a thin, see-through, 'skeletonized' look where the caterpillars have chewed through the surface layer.",
     controlSlug: "clearlawn-spinosad",
+    image: {
+      src: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Sod_Webworm_-_Pediasia_trisecta%2C_Woodbridge%2C_Virginia.jpg/960px-Sod_Webworm_-_Pediasia_trisecta%2C_Woodbridge%2C_Virginia.jpg",
+      alt: "A sod webworm moth (Pediasia trisecta) resting with wings folded",
+    },
   },
   {
     slug: "fall-armyworms",
@@ -33,6 +42,10 @@ export const pests: Pest[] = [
     damageSigns:
       "Similar skeletonized, transparent patches as sod webworms, often appearing suddenly in small brown patches that expand fast.",
     controlSlug: "shieldpro-bifenthrin",
+    image: {
+      src: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/Spodoptera_frugiperda_caterpillar01.jpg/960px-Spodoptera_frugiperda_caterpillar01.jpg",
+      alt: "A fall armyworm caterpillar (Spodoptera frugiperda) on plant tissue",
+    },
   },
   {
     slug: "white-grubs",
@@ -42,6 +55,10 @@ export const pests: Pest[] = [
     damageSigns:
       "Damage happens underground first — grubs feed on roots, so affected turf pulls up loosely like a loose rug, and damage often peaks in late summer.",
     controlSlug: "depthguard-grub-control",
+    image: {
+      src: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/84/White_grub.jpg/960px-White_grub.jpg",
+      alt: "A C-shaped white grub, the larval stage of a turf-damaging beetle",
+    },
   },
   {
     slug: "hunting-billbugs",
@@ -51,6 +68,10 @@ export const pests: Pest[] = [
     damageSigns:
       "Irregular dead patches that look like drought stress. A simple check: tug on the dead grass — if it lifts easily with no root resistance, billbugs (rather than an irrigation issue) are the likely cause.",
     controlSlug: "shieldpro-bifenthrin",
+    image: {
+      src: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/Nutgrass_Billbug_-_Sphenophorus_cariosus%2C_Meadowood_Farm%2C_Mason_Neck%2C_Virginia.jpg/960px-Nutgrass_Billbug_-_Sphenophorus_cariosus%2C_Meadowood_Farm%2C_Mason_Neck%2C_Virginia.jpg",
+      alt: "A billbug weevil (Sphenophorus sp.) showing its characteristic long snout",
+    },
   },
   {
     slug: "spittlebugs",
@@ -60,6 +81,10 @@ export const pests: Pest[] = [
     damageSigns:
       "A frothy, spit-like substance in the thatch layer, and thin purple or white streaking along individual grass blades.",
     controlSlug: "shieldpro-bifenthrin",
+    image: {
+      src: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/Two-Lined_Spittlebug.jpg/960px-Two-Lined_Spittlebug.jpg",
+      alt: "A two-lined spittlebug (Prosapia bicincta) showing its dark body with two red stripes",
+    },
   },
   {
     slug: "mole-crickets",
@@ -69,6 +94,10 @@ export const pests: Pest[] = [
     damageSigns:
       "Raised, spongy tunnel tracks through the lawn and small mounded soil openings, especially during spring mating season.",
     controlSlug: "depthguard-grub-control",
+    image: {
+      src: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d8/Southern_Mole_Cricket_-_Scapteriscus_borellii%2C_Sapelo_Island%2C_Georgia.jpg/960px-Southern_Mole_Cricket_-_Scapteriscus_borellii%2C_Sapelo_Island%2C_Georgia.jpg",
+      alt: "A southern mole cricket (Scapteriscus borellii) showing its shovel-like digging legs",
+    },
   },
 ];
 
