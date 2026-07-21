@@ -5,6 +5,10 @@ export type Pest = {
   damageSigns: string;
   controlSlug: string;
   image: { src: string; alt: string };
+  // Filename (in public/pest-examples/) of a photo showing this pest's damage
+  // pattern on turf. Sent to the vision model as a labeled few-shot reference
+  // so it can match a customer's lawn photo against real damage examples.
+  damageExample?: { file: string; alt: string };
 };
 
 export const pests: Pest[] = [
@@ -20,6 +24,10 @@ export const pests: Pest[] = [
       src: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/Hairy_Chinch_Bug_-_Blissus_leucopteru_%2850594763067%29.jpg/960px-Hairy_Chinch_Bug_-_Blissus_leucopteru_%2850594763067%29.jpg",
       alt: "Close-up of a hairy chinch bug (Blissus leucopterus) on a blade of grass",
     },
+    damageExample: {
+      file: "chinch-bugs-damage.jpg",
+      alt: "Lawn with irregular yellow-to-brown patches, resembling drought stress, from chinch bug feeding",
+    },
   },
   {
     slug: "sod-webworms",
@@ -32,6 +40,10 @@ export const pests: Pest[] = [
     image: {
       src: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Sod_Webworm_-_Pediasia_trisecta%2C_Woodbridge%2C_Virginia.jpg/960px-Sod_Webworm_-_Pediasia_trisecta%2C_Woodbridge%2C_Virginia.jpg",
       alt: "A sod webworm moth (Pediasia trisecta) resting with wings folded",
+    },
+    damageExample: {
+      file: "sod-webworms-damage.jpg",
+      alt: "Turf with thin, brown, skeletonized patches where sod webworm caterpillars have chewed through the grass blades",
     },
   },
   {
@@ -46,6 +58,10 @@ export const pests: Pest[] = [
       src: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/Spodoptera_frugiperda_caterpillar01.jpg/960px-Spodoptera_frugiperda_caterpillar01.jpg",
       alt: "A fall armyworm caterpillar (Spodoptera frugiperda) on plant tissue",
     },
+    damageExample: {
+      file: "fall-armyworms-damage.jpg",
+      alt: "Lawn with brown, scalped patches that appeared suddenly and spread from fall armyworm feeding",
+    },
   },
   {
     slug: "white-grubs",
@@ -58,6 +74,10 @@ export const pests: Pest[] = [
     image: {
       src: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/84/White_grub.jpg/960px-White_grub.jpg",
       alt: "A C-shaped white grub, the larval stage of a turf-damaging beetle",
+    },
+    damageExample: {
+      file: "white-grubs-damage.jpg",
+      alt: "Dead lawn patch where turf lifts loosely like a rug because white grubs have eaten the roots",
     },
   },
   {
@@ -72,6 +92,10 @@ export const pests: Pest[] = [
       src: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/Nutgrass_Billbug_-_Sphenophorus_cariosus%2C_Meadowood_Farm%2C_Mason_Neck%2C_Virginia.jpg/960px-Nutgrass_Billbug_-_Sphenophorus_cariosus%2C_Meadowood_Farm%2C_Mason_Neck%2C_Virginia.jpg",
       alt: "A billbug weevil (Sphenophorus sp.) showing its characteristic long snout",
     },
+    damageExample: {
+      file: "hunting-billbugs-damage.jpg",
+      alt: "Irregular dead, drought-like patches in turf from hunting billbug damage, where dead grass lifts with no root resistance",
+    },
   },
   {
     slug: "spittlebugs",
@@ -85,6 +109,10 @@ export const pests: Pest[] = [
       src: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/Two-Lined_Spittlebug.jpg/960px-Two-Lined_Spittlebug.jpg",
       alt: "A two-lined spittlebug (Prosapia bicincta) showing its dark body with two red stripes",
     },
+    damageExample: {
+      file: "spittlebugs-damage.jpg",
+      alt: "Grass with frothy, spit-like masses in the thatch and thin purple or white streaking on the blades from spittlebugs",
+    },
   },
   {
     slug: "mole-crickets",
@@ -97,6 +125,10 @@ export const pests: Pest[] = [
     image: {
       src: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d8/Southern_Mole_Cricket_-_Scapteriscus_borellii%2C_Sapelo_Island%2C_Georgia.jpg/960px-Southern_Mole_Cricket_-_Scapteriscus_borellii%2C_Sapelo_Island%2C_Georgia.jpg",
       alt: "A southern mole cricket (Scapteriscus borellii) showing its shovel-like digging legs",
+    },
+    damageExample: {
+      file: "mole-crickets-damage.jpg",
+      alt: "Lawn with raised, spongy tunnel tracks and small mounds of pushed-up soil from mole cricket tunneling",
     },
   },
 ];

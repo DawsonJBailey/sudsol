@@ -1,8 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { recommendProducts, type LawnPreferences } from "@/lib/data";
-import { getProducts } from "@/lib/shopify/catalog";
-import { pests, controlProducts } from "@/lib/pests";
+import {
+  getProducts,
+  getControlProducts,
+  type CatalogProduct,
+  type ControlCatalogProduct,
+} from "@/lib/shopify/catalog";
+import { pests } from "@/lib/pests";
 import { SUPPORTED_IMAGE_MEDIA_TYPES, sniffImageMediaType } from "@/lib/image";
+import { buildReferenceContentBlocks } from "@/lib/pest-reference-images";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+
+// Per-IP limit for the chat endpoint: enough for a real conversation, tight
+// enough that a bot hammering the endpoint gets cut off quickly.
+const RATE_LIMIT = 20;
+const RATE_WINDOW_MS = 5 * 60 * 1000;
 
 export const runtime = "nodejs";
 
@@ -12,27 +24,169 @@ type ChatContentBlock =
 
 type ChatMessage = { role: "user" | "assistant"; content: string | ChatContentBlock[] };
 
-const pestSlugList = pests.map((p) => `${p.slug}: ${p.name}`).join("\n");
+// Full field guide, not just slug:name — the model needs each pest's
+// identification and damage-sign criteria to tell look-alikes apart.
+const pestGuide = pests
+  .map((p) => `- ${p.slug} (${p.name}): ${p.identification} Damage signs: ${p.damageSigns}`)
+  .join("\n");
 
 const SYSTEM_PROMPT = `You are the Meridian Turf lawn care assistant, embedded as a chat widget on our storefront.
 
 You have two jobs:
 
-1. Help visitors pick the right sod, seed, or plug product by asking about, at most a couple at a time:
-- Full sun or shade
-- High traffic or low traffic
-- Low maintenance vs. best appearance
-- Starting a new lawn vs. filling bare spots
-If a visitor mentions their location, climate, ZIP code, hardiness zone, or region, just acknowledge it briefly and move straight to asking about sun/shade, traffic, maintenance, or goal — don't dwell on it.
-Once you have at least one clear preference, call the recommend_products tool to fetch real matching products before recommending anything.
+1. Help visitors pick the right sod, seed, or plug product. To recommend well you need four things:
+- sun: full sun or shade
+- traffic: high or low foot traffic
+- maintenance: low-maintenance or best-looking
+- goal: a brand-new lawn or patching bare spots
+Gather these with the ask_preferences tool: call it with EVERY preference you don't yet know, and the visitor is shown tappable answer buttons for each one (including a "Not sure" option). Call it in your very first reply with all four unless the visitor already told you some. Never ask about sun, traffic, maintenance, or goal in prose — the buttons do the asking; your accompanying text must be only a short, friendly lead-in like "Happy to help! A few quick questions:" with no questions or options written out.
+Visitors may answer by tapping (their reply reads like "Full sun. Not sure about traffic.") or by typing freely. Treat any "not sure" as no preference: recommend without that filter and do NOT re-ask it. If some preferences are still unknown after their reply, call ask_preferences again with just those. If a visitor mentions their location, climate, ZIP code, hardiness zone, or region, acknowledge it in a word and move on.
+Once every preference is answered or marked not-sure (or the visitor doesn't want to give more), call the recommend_products tool to fetch the real matches, then call the show_products tool with the 2-3 slugs you want to surface. Never recommend a product to the visitor without calling show_products.
 
-2. If a visitor attaches a photo of an insect or lawn damage, identify which of these known lawn pests it matches by slug, or "unknown" if it doesn't clearly match one of these or isn't a lawn pest at all:
-${pestSlugList}
-Then call the identify_pest tool with that slug to fetch the real treatment info before responding.
+2. If a visitor attaches a photo of an insect or lawn damage, help identify which of these known lawn pests it is:
+${pestGuide}
 
-Never state a product name, price, spec, pest name, or treatment unless it came back from one of these tools — do not invent or recall facts from memory. If a tool returns no match, say so plainly rather than making something up. Keep replies short and conversational.
+When a photo is attached you'll also be given labeled reference photos of each pest's typical turf damage. Work like a careful turf expert:
+- If the photo clearly points to one pest — a visible close-up of the insect, or a distinctive sign like mole cricket tunnels and soil mounds, sod webworm or armyworm skeletonized/see-through blades, or spittlebug froth — identify it, call the identify_pest tool with that slug, then give the treatment. Judge by the pest or its telltale sign itself, NOT by whether the plant in the photo is grass: if you recognize one of these pests or its characteristic sign (e.g. spittlebug froth), identify it and treat it the same way even when it appears on a weed, ornamental, or other plant near the lawn rather than on turfgrass. These pests move onto turf, so an identification is still useful to the visitor.
+- IMPORTANT: chinch bugs, hunting billbugs, white grubs, and fall armyworms all produce nearly identical irregular brown, drought-like patches in a wide lawn photo. When the photo looks like that generic patchy damage and no insect is visible, do NOT guess a single pest. Instead, call the ask_pest_checks tool with every diagnostic check that would help distinguish the likely candidates — the visitor sees each as a tappable Yes / No / Not sure question. What each check points to when the answer is yes:
+   • carpet-peel → white grubs
+   • tug-test → hunting billbugs
+   • hot-edges → chinch bugs
+   • sudden-spread → fall armyworms
+   Never write these checks out as prose questions — the buttons do that. Your text should briefly name the likely culprits and invite them to answer the quick checks below, mentioning that a close-up photo of any insect they can find also works. Their reply may be tapped answers (reading like "Yes — the dead patches peel back easily like a loose carpet. No — the grass resists when tugged.") or typed free text. Interpret the answers: a clear yes on a check points to its pest — call identify_pest with that slug and give the treatment. If the answers are all no / not-sure, or conflicting, say you can't confirm from this alone and ask for a close-up photo of any insect in the affected area.
+- Only when the photo matches none of these known pests or their signs at all, call identify_pest with "unknown". Do not answer "unknown" just because the pest or sign is on a non-grass plant.
+
+You may refer to the known pests above by name when explaining possibilities or asking a narrowing question. But never give a definitive identification until identify_pest has returned, and never invent or recall product facts from memory. If a tool returns no match, say so plainly rather than making something up.
+
+PRESENTATION — the products you pick with show_products, and the pest treatment from identify_pest, appear as interactive cards right below your message, each with the product photo, price, and an Add to Cart button. In your reply, DO explain your recommendations like a knowledgeable person talking a friend through it: in a few natural sentences, tell the visitor why these particular picks suit what they told you — connect them to their sun, traffic, upkeep, and goal — and mention the products by name conversationally. What you must NOT do is format this as a product catalog: no "**Product Name** — description" bullet lists, and don't recite prices or spec sheets, since the cards already show those. For a pest, name it, note the damage briefly, and mention that the treatment shown will handle it. Keep it warm and concise.
 
 Never mention how you work internally — don't explain what data you do or don't use, what you "factor in" or "consider," how recommendations are generated, or any other limitation or mechanism behind the scenes. Just help the visitor naturally, as a knowledgeable lawn care person would, without narrating your own process.`;
+
+// Fixed, deterministic definitions for the preference questions the widget can
+// render as tappable buttons. The model only chooses WHICH of these to ask (via
+// ask_preferences); the wording and options always come from here. Option
+// `value` is the text the client sends back as the visitor's reply when tapped.
+export type PreferenceQuestion = {
+  key: string;
+  question: string;
+  options: { label: string; value: string }[];
+};
+
+const PREFERENCE_QUESTIONS: Record<string, PreferenceQuestion> = {
+  sun: {
+    key: "sun",
+    question: "How much sun does the area get?",
+    options: [
+      { label: "Full sun", value: "Full sun" },
+      { label: "Mostly shade", value: "Mostly shade" },
+      { label: "Not sure", value: "Not sure about sun" },
+    ],
+  },
+  traffic: {
+    key: "traffic",
+    question: "How much foot traffic?",
+    options: [
+      { label: "High traffic", value: "High foot traffic" },
+      { label: "Low traffic", value: "Low foot traffic" },
+      { label: "Not sure", value: "Not sure about traffic" },
+    ],
+  },
+  maintenance: {
+    key: "maintenance",
+    question: "What matters more?",
+    options: [
+      { label: "Low maintenance", value: "Low maintenance" },
+      { label: "Best appearance", value: "Best-looking lawn possible" },
+      { label: "Not sure", value: "Not sure about upkeep" },
+    ],
+  },
+  goal: {
+    key: "goal",
+    question: "What's the project?",
+    options: [
+      { label: "Brand-new lawn", value: "Starting a brand-new lawn" },
+      { label: "Patch bare spots", value: "Patching bare spots" },
+      { label: "Not sure", value: "Not sure about the goal yet" },
+    ],
+  },
+};
+
+// Diagnostic checks that distinguish the look-alike "drought-stress patch"
+// pests. Same rendering path as the preference questions: the model picks WHICH
+// checks to ask, the wording/options are fixed here, and each tapped option
+// composes into an unambiguous plain-text visitor reply.
+const PEST_CHECK_QUESTIONS: Record<string, PreferenceQuestion> = {
+  "carpet-peel": {
+    key: "carpet-peel",
+    question: "Do the dead patches peel or lift back easily, like a loose carpet?",
+    options: [
+      { label: "Yes", value: "Yes — the dead patches peel back easily like a loose carpet" },
+      { label: "No", value: "No — the dead patches don't peel back like carpet" },
+      { label: "Not sure", value: "Not sure about the carpet-peel check" },
+    ],
+  },
+  "tug-test": {
+    key: "tug-test",
+    question: "When you tug a handful of brown grass, does it pull out with little or no root resistance?",
+    options: [
+      { label: "Yes", value: "Yes — tugged grass pulls out with little or no root resistance" },
+      { label: "No", value: "No — the grass resists when tugged" },
+      { label: "Not sure", value: "Not sure about the tug test" },
+    ],
+  },
+  "hot-edges": {
+    key: "hot-edges",
+    question: "Are the worst patches along hot, dry edges like sidewalks or driveways?",
+    options: [
+      { label: "Yes", value: "Yes — damage is worst along hot, dry edges like sidewalks and driveways" },
+      { label: "No", value: "No — the damage isn't concentrated along hot, dry edges" },
+      { label: "Not sure", value: "Not sure whether damage is worse near edges" },
+    ],
+  },
+  "sudden-spread": {
+    key: "sudden-spread",
+    question: "Did the damage appear suddenly and spread across the lawn within days?",
+    options: [
+      { label: "Yes", value: "Yes — the damage appeared suddenly and spread within days" },
+      { label: "No", value: "No — the damage developed gradually" },
+      { label: "Not sure", value: "Not sure how quickly the damage spread" },
+    ],
+  },
+};
+
+const ASK_PEST_CHECKS_TOOL = {
+  name: "ask_pest_checks",
+  description:
+    "Show the visitor tappable Yes / No / Not sure buttons for the diagnostic checks that distinguish look-alike pest damage. Always use this instead of writing the checks out as prose questions. Your accompanying text should name the likely pests and invite the visitor to answer the quick checks (or send a close-up insect photo) — never restate the check questions in words.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      checks: {
+        type: "array",
+        items: { type: "string", enum: Object.keys(PEST_CHECK_QUESTIONS) },
+        description: "Which diagnostic checks to show — include every check that would help distinguish the candidates.",
+      },
+    },
+    required: ["checks"],
+  },
+};
+
+const ASK_PREFERENCES_TOOL = {
+  name: "ask_preferences",
+  description:
+    "Show the visitor tappable answer buttons for the lawn preferences you still need. Always use this instead of asking about sun, traffic, maintenance, or goal in prose. Your accompanying text should be only a brief friendly lead-in — never restate the questions or options in words.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      questions: {
+        type: "array",
+        items: { type: "string", enum: Object.keys(PREFERENCE_QUESTIONS) },
+        description: "Which preferences to ask about — include every one you don't yet know.",
+      },
+    },
+    required: ["questions"],
+  },
+};
 
 const RECOMMEND_PRODUCTS_TOOL = {
   name: "recommend_products",
@@ -46,6 +200,23 @@ const RECOMMEND_PRODUCTS_TOOL = {
       maintenance: { type: "string", enum: ["low", "best-appearance"] },
       goal: { type: "string", enum: ["new-lawn", "bare-spot-repair"] },
     },
+  },
+};
+
+const SHOW_PRODUCTS_TOOL = {
+  name: "show_products",
+  description:
+    "Choose which of the products returned by recommend_products to show the visitor as interactive cards (usually 2-3). Call this after recommend_products and before recommending anything in your reply.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      slugs: {
+        type: "array",
+        items: { type: "string" },
+        description: "Slugs to display, chosen from the recommend_products results.",
+      },
+    },
+    required: ["slugs"],
   },
 };
 
@@ -74,9 +245,17 @@ async function callAnthropic(apiKey: string, messages: unknown[]) {
     },
     body: JSON.stringify({
       model: "claude-sonnet-5",
-      max_tokens: 600,
-      system: SYSTEM_PROMPT,
-      tools: [RECOMMEND_PRODUCTS_TOOL, IDENTIFY_PEST_TOOL],
+      max_tokens: 1024,
+      // cache_control on the system block also caches the tools (they render
+      // first), so this whole static prefix is reused across every request.
+      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      tools: [
+        ASK_PREFERENCES_TOOL,
+        ASK_PEST_CHECKS_TOOL,
+        RECOMMEND_PRODUCTS_TOOL,
+        SHOW_PRODUCTS_TOOL,
+        IDENTIFY_PEST_TOOL,
+      ],
       messages,
     }),
   });
@@ -87,7 +266,12 @@ async function callAnthropic(apiKey: string, messages: unknown[]) {
     throw new Error("AI request failed");
   }
 
-  return response.json();
+  const data = await response.json();
+  const usage = data.usage ?? {};
+  console.log(
+    `lawn-assistant cache: read=${usage.cache_read_input_tokens ?? 0} write=${usage.cache_creation_input_tokens ?? 0} uncached=${usage.input_tokens ?? 0}`
+  );
+  return data;
 }
 
 function toAnthropicContent(content: string | ChatContentBlock[]) {
@@ -112,10 +296,34 @@ function toAnthropicContent(content: string | ChatContentBlock[]) {
 
 export async function POST(req: NextRequest) {
   try {
+    const rate = checkRateLimit("lawn-assistant", getClientIp(req), RATE_LIMIT, RATE_WINDOW_MS);
+    if (!rate.ok) {
+      return NextResponse.json(
+        { error: "You're sending messages too quickly. Give it a minute and try again." },
+        { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } }
+      );
+    }
+
     const { messages } = (await req.json()) as { messages: ChatMessage[] };
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: "Missing messages" }, { status: 400 });
+    }
+
+    // Payload caps: the widget never produces conversations or images this
+    // large, so anything over these lines is a direct-to-API abuser.
+    if (messages.length > 40) {
+      return NextResponse.json({ error: "Conversation too long." }, { status: 400 });
+    }
+    const MAX_IMAGE_BASE64 = 8 * 1024 * 1024; // ~6MB decoded
+    for (const m of messages) {
+      if (Array.isArray(m.content)) {
+        for (const block of m.content) {
+          if (block.type === "image" && block.data.length > MAX_IMAGE_BASE64) {
+            return NextResponse.json({ error: "Image too large." }, { status: 400 });
+          }
+        }
+      }
     }
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -126,7 +334,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let anthropicMessages: unknown[];
+    let anthropicMessages: Array<{ role: string; content: unknown }>;
     try {
       anthropicMessages = messages.map((m) => ({
         role: m.role,
@@ -139,10 +347,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // When the visitor has attached a photo, prepend the labeled pest damage
+    // reference images right before that photo so the model classifies few-shot.
+    // The references must go on the user turn holding the image — image blocks
+    // aren't allowed in assistant turns (e.g. the greeting). Skipped for
+    // text-only chats to avoid the extra image payload.
+    const referenceBlocks = buildReferenceContentBlocks();
+    if (referenceBlocks.length > 0) {
+      const imageTurn = anthropicMessages.find(
+        (m) =>
+          m.role === "user" &&
+          Array.isArray(m.content) &&
+          m.content.some((b) => (b as { type?: string }).type === "image")
+      );
+      if (imageTurn) {
+        imageTurn.content = [...referenceBlocks, ...(imageTurn.content as unknown[])];
+      }
+    }
+
     let data = await callAnthropic(apiKey, anthropicMessages);
     let recommended: ReturnType<typeof recommendProducts> = [];
+    // The subset the model chose to surface — this becomes the visitor's cards.
+    let presented: CatalogProduct[] = [];
+    // Preference questions the model asked this turn, rendered by the widget
+    // as tappable answer buttons.
+    let askedQuestions: PreferenceQuestion[] = [];
     let identifiedPest: (typeof pests)[number] | null = null;
-    let controlProduct: (typeof controlProducts)[number] | null = null;
+    let controlProduct: ControlCatalogProduct | null = null;
 
     for (let round = 0; data.stop_reason === "tool_use" && round < MAX_TOOL_ROUNDS; round++) {
       const toolUseBlocks = (
@@ -152,6 +383,26 @@ export async function POST(req: NextRequest) {
       if (toolUseBlocks.length === 0) break;
 
       const toolResults = await Promise.all(toolUseBlocks.map(async (block) => {
+        if (block.name === "ask_preferences" || block.name === "ask_pest_checks") {
+          const defs = block.name === "ask_preferences" ? PREFERENCE_QUESTIONS : PEST_CHECK_QUESTIONS;
+          const keys = (block.input?.questions ?? block.input?.checks ?? []) as string[];
+          // Map to the fixed definitions, dropping unknowns and duplicates,
+          // merging with any questions already asked this turn.
+          const mapped = [...new Set(keys)].flatMap((k) => {
+            const q = defs[k];
+            return q && !askedQuestions.some((a) => a.key === q.key) ? [q] : [];
+          });
+          askedQuestions = [...askedQuestions, ...mapped];
+          return {
+            type: "tool_result" as const,
+            tool_use_id: block.id,
+            content: JSON.stringify({
+              displayed: mapped.map((q) => q.key),
+              note: "Answer buttons are now shown to the visitor. Reply with only a brief friendly lead-in.",
+            }),
+          };
+        }
+
         if (block.name === "recommend_products") {
           // Same 5-minute fetch cache as the storefront pages.
           const catalog = await getProducts();
@@ -173,12 +424,32 @@ export async function POST(req: NextRequest) {
           };
         }
 
+        if (block.name === "show_products") {
+          const catalog = await getProducts();
+          const slugs = (block.input?.slugs ?? []) as string[];
+          // Match each chosen slug back to the real catalog product, dropping any
+          // slug the model invented.
+          presented = slugs.flatMap((slug) => {
+            const product = catalog.find((c) => c.slug === slug);
+            return product ? [product] : [];
+          });
+          return {
+            type: "tool_result" as const,
+            tool_use_id: block.id,
+            content: JSON.stringify({ shown: presented.map((p) => p.slug) }),
+          };
+        }
+
         if (block.name === "identify_pest") {
           const pestSlug = block.input?.pestSlug as string | undefined;
           const pest = pests.find((p) => p.slug === pestSlug) ?? null;
-          const product = pest ? controlProducts.find((c) => c.slug === pest.controlSlug) ?? null : null;
           identifiedPest = pest;
-          controlProduct = product;
+          // Pull the treatment from Shopify (not the static fixture) so the
+          // client gets the variant id + product image its Add to Cart card needs.
+          if (pest) {
+            const controls = await getControlProducts();
+            controlProduct = controls.find((c) => c.slug === pest.controlSlug) ?? null;
+          }
 
           return {
             type: "tool_result" as const,
@@ -186,7 +457,14 @@ export async function POST(req: NextRequest) {
             content: pest
               ? JSON.stringify({
                   pest: { slug: pest.slug, name: pest.name, damageSigns: pest.damageSigns },
-                  treatment: product,
+                  treatment: controlProduct
+                    ? {
+                        name: controlProduct.name,
+                        activeIngredient: controlProduct.activeIngredient,
+                        price: controlProduct.price,
+                        description: controlProduct.description,
+                      }
+                    : null,
                 })
               : JSON.stringify({ message: "No confident match against known lawn pests." }),
           };
@@ -204,14 +482,45 @@ export async function POST(req: NextRequest) {
     }
 
     const textBlock = (data.content as Array<{ type: string; text?: string }>)?.find((b) => b.type === "text");
+    let reply = textBlock?.text?.trim();
 
-    if (!textBlock?.text) {
-      return NextResponse.json({ error: "No response from model" }, { status: 502 });
+    if (!reply) {
+      // The model ended its turn without any prose (e.g. it emitted only a tool
+      // call, or the output was truncated). Never dead-end the visitor: if a tool
+      // already gave us grounded data, answer from that; otherwise ask them to
+      // retry. All facts below come from our own catalog/pest data, so this stays
+      // within the same grounding rules as a normal tool-backed reply.
+      console.warn("lawn-assistant: final model turn had no text", {
+        stop_reason: data.stop_reason,
+        blocks: (data.content as Array<{ type: string }>)?.map((b) => b.type),
+      });
+
+      // Cast back to the intended union: the values are only assigned inside the
+      // async tool-loop callback, so control-flow analysis otherwise narrows them
+      // to `never` here.
+      const pest = identifiedPest as (typeof pests)[number] | null;
+      const product = controlProduct as ControlCatalogProduct | null;
+
+      if (pest) {
+        reply = product
+          ? `That looks like ${pest.name}. ${pest.damageSigns} For treatment, ${product.name} ($${product.price.toFixed(2)}) works well — ${product.description}`
+          : `That looks like ${pest.name}. ${pest.damageSigns}`;
+      } else if (presented.length > 0 || recommended.length > 0) {
+        reply = "Here are a few options that fit what you described:";
+      } else if (askedQuestions.length > 0) {
+        reply = "A few quick questions to help narrow it down:";
+      } else {
+        reply =
+          "Sorry — I didn't quite catch that. Could you rephrase, or attach a photo and I'll take a look?";
+      }
     }
 
     return NextResponse.json({
-      reply: textBlock.text,
-      products: recommended,
+      // Prefer the model's curated, reasoned selection; fall back to the raw
+      // matches if it recommended without calling show_products.
+      reply,
+      products: presented.length > 0 ? presented : recommended,
+      questions: askedQuestions,
       pest: identifiedPest,
       controlProduct,
     });
