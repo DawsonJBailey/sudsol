@@ -10,6 +10,7 @@ import { pests } from "@/lib/pests";
 import { SUPPORTED_IMAGE_MEDIA_TYPES, sniffImageMediaType } from "@/lib/image";
 import { buildReferenceContentBlocks } from "@/lib/pest-reference-images";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { PREFERENCE_QUESTIONS, type PreferenceQuestion } from "@/lib/preferences";
 
 // Per-IP limit for the chat endpoint: enough for a real conversation, tight
 // enough that a bot hammering the endpoint gets cut off quickly.
@@ -39,6 +40,7 @@ You have two jobs:
 - traffic: high or low foot traffic
 - maintenance: low-maintenance or best-looking
 - goal: a brand-new lawn or patching bare spots
+- timeline (optional, and the deciding factor for sod vs seed): wanting a finished lawn right away means sod — it installs as an established lawn. Being happy to wait a few weeks means seed, which costs less but takes weeks to fill in. Plugs sit in between. When the visitor gives a timeline, honor it when choosing which slugs to pass to show_products, and say a word about the tradeoff in your reply.
 Gather these with the ask_preferences tool: call it with EVERY preference you don't yet know, and the visitor is shown tappable answer buttons for each one (including a "Not sure" option). Call it in your very first reply with all four unless the visitor already told you some. Never ask about sun, traffic, maintenance, or goal in prose — the buttons do the asking; your accompanying text must be only a short, friendly lead-in like "Happy to help! A few quick questions:" with no questions or options written out.
 Visitors may answer by tapping (their reply reads like "Full sun. Not sure about traffic.") or by typing freely. Treat any "not sure" as no preference: recommend without that filter and do NOT re-ask it. If some preferences are still unknown after their reply, call ask_preferences again with just those. If a visitor mentions their location, climate, ZIP code, hardiness zone, or region, acknowledge it in a word and move on.
 Once every preference is answered or marked not-sure (or the visitor doesn't want to give more), call the recommend_products tool to fetch the real matches, then call the show_products tool with the 2-3 slugs you want to surface. Never recommend a product to the visitor without calling show_products.
@@ -70,55 +72,6 @@ You may refer to the known pests above by name when explaining possibilities or 
 PRESENTATION — the products you pick with show_products, and the pest treatment from identify_pest, appear as interactive cards right below your message, each with the product photo, price, and an Add to Cart button. In your reply, DO explain your recommendations like a knowledgeable person talking a friend through it: in a few natural sentences, tell the visitor why these particular picks suit what they told you — connect them to their sun, traffic, upkeep, and goal — and mention the products by name conversationally. What you must NOT do is format this as a product catalog: no "**Product Name** — description" bullet lists, and don't recite prices or spec sheets, since the cards already show those. For a pest, name it, note the damage briefly, and mention that the treatment shown will handle it. Keep it warm and concise.
 
 Never mention how you work internally — don't explain what data you do or don't use, what you "factor in" or "consider," how recommendations are generated, or any other limitation or mechanism behind the scenes. Just help the visitor naturally, as a knowledgeable lawn care person would, without narrating your own process.`;
-
-// Fixed, deterministic definitions for the preference questions the widget can
-// render as tappable buttons. The model only chooses WHICH of these to ask (via
-// ask_preferences); the wording and options always come from here. Option
-// `value` is the text the client sends back as the visitor's reply when tapped.
-export type PreferenceQuestion = {
-  key: string;
-  question: string;
-  options: { label: string; value: string }[];
-};
-
-const PREFERENCE_QUESTIONS: Record<string, PreferenceQuestion> = {
-  sun: {
-    key: "sun",
-    question: "How much sun does the area get?",
-    options: [
-      { label: "Full sun", value: "Full sun" },
-      { label: "Mostly shade", value: "Mostly shade" },
-      { label: "Not sure", value: "Not sure about sun" },
-    ],
-  },
-  traffic: {
-    key: "traffic",
-    question: "How much foot traffic?",
-    options: [
-      { label: "High traffic", value: "High foot traffic" },
-      { label: "Low traffic", value: "Low foot traffic" },
-      { label: "Not sure", value: "Not sure about traffic" },
-    ],
-  },
-  maintenance: {
-    key: "maintenance",
-    question: "What matters more?",
-    options: [
-      { label: "Low maintenance", value: "Low maintenance" },
-      { label: "Best appearance", value: "Best-looking lawn possible" },
-      { label: "Not sure", value: "Not sure about upkeep" },
-    ],
-  },
-  goal: {
-    key: "goal",
-    question: "What's the project?",
-    options: [
-      { label: "Brand-new lawn", value: "Starting a brand-new lawn" },
-      { label: "Patch bare spots", value: "Patching bare spots" },
-      { label: "Not sure", value: "Not sure about the goal yet" },
-    ],
-  },
-};
 
 // Diagnostic checks that distinguish the look-alike "drought-stress patch"
 // pests. Same rendering path as the preference questions: the model picks WHICH

@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { fileToVisionJpeg } from "@/lib/image-client";
+import {
+  ALL_PREFERENCE_QUESTIONS,
+  type PreferenceQuestion,
+} from "@/lib/preferences";
 import ChatProductCard from "./ChatProductCard";
 
 // Products/treatments the API returns to the client carry the Shopify variant id
@@ -24,14 +28,6 @@ type ChatControlProduct = {
   variantId: string;
 };
 
-// A preference question the bot asked, rendered as tappable answer buttons.
-// Definitions come from the API (fixed server-side), never parsed from prose.
-type PreferenceQuestion = {
-  key: string;
-  question: string;
-  options: { label: string; value: string }[];
-};
-
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -50,13 +46,26 @@ const GREETING: ChatMessage = {
     "Hi! I can help with lawn care, products, and how-tos. Choose a suggestion or type below.",
 };
 
-const SUGGESTIONS = [
-  "What grass type fits my climate?",
-  "How do I fix brown or thin spots?",
-  "Help me plan a fertilizer schedule",
-  "Sod vs seed for my yard - what should I pick?",
-  // "Where can I shop lawn products?",
+// Chips with a `questions` set are unambiguous "help me pick a product"
+// intents, where the bot always responds with the same fixed questions.
+// Rendering those buttons locally makes them appear instantly and skips two
+// Anthropic round-trips. Ambiguous chips still go to the model.
+const SUGGESTIONS: { label: string; questions?: PreferenceQuestion[] }[] = [
+  {
+    label: "What grass type fits my climate?",
+    questions: ALL_PREFERENCE_QUESTIONS,
+  },
+  // { label: "How do I fix brown or thin spots?" },
+  // { label: "Help me plan a fertilizer schedule" },
+  {
+    label: "Sod vs seed for my yard - what should I pick?",
+    questions: ALL_PREFERENCE_QUESTIONS,
+  },
+  // { label: "Where can I shop lawn products?" },
 ];
+
+const PREFERENCES_LEAD_IN =
+  "Happy to help you find the right fit! A few quick questions — tap whichever apply:";
 
 // Pest identification is handled locally rather than as an API call: clicking it
 // just prompts the visitor for a photo, which they then attach via the 📷 button.
@@ -70,7 +79,9 @@ export default function LawnAssistant() {
   const [input, setInput] = useState("");
   const [pendingImage, setPendingImage] = useState<PendingImage | null>(null);
   // Tapped answers for the latest bot question set, keyed by question key.
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
+  const [selectedAnswers, setSelectedAnswers] = useState<
+    Record<string, string>
+  >({});
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -107,8 +118,13 @@ export default function LawnAssistant() {
 
   // Compose the tapped answers into a plain-text visitor reply (the model
   // handles it exactly like a typed sentence) and send it.
-  function sendSelectedAnswers(questions: PreferenceQuestion[], answers: Record<string, string>) {
-    const parts = questions.flatMap((q) => (answers[q.key] ? [answers[q.key]] : []));
+  function sendSelectedAnswers(
+    questions: PreferenceQuestion[],
+    answers: Record<string, string>,
+  ) {
+    const parts = questions.flatMap((q) =>
+      answers[q.key] ? [answers[q.key]] : [],
+    );
     if (parts.length === 0) return;
     setSelectedAnswers({});
     sendMessage(parts.join(". ") + ".");
@@ -117,7 +133,7 @@ export default function LawnAssistant() {
   function handleSelectOption(
     questions: PreferenceQuestion[],
     questionKey: string,
-    value: string
+    value: string,
   ) {
     if (loading) return;
     const next = { ...selectedAnswers, [questionKey]: value };
@@ -126,6 +142,23 @@ export default function LawnAssistant() {
     if (questions.every((q) => next[q.key])) {
       sendSelectedAnswers(questions, next);
     }
+  }
+
+  // Show the preference questions immediately, with no API call — the bot's
+  // response to these chips is always the same fixed question set.
+  function startPreferenceFlow(label: string, questions: PreferenceQuestion[]) {
+    if (loading) return;
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: label },
+      {
+        role: "assistant",
+        content: PREFERENCES_LEAD_IN,
+        questions,
+      },
+    ]);
+    setInput("");
+    setSelectedAnswers({});
   }
 
   // Reset the conversation to its initial state (greeting + suggestions).
@@ -327,13 +360,18 @@ export default function LawnAssistant() {
                             </p>
                             <div className="flex flex-wrap gap-1.5">
                               {q.options.map((opt) => {
-                                const selected = selectedAnswers[q.key] === opt.value;
+                                const selected =
+                                  selectedAnswers[q.key] === opt.value;
                                 return (
                                   <button
                                     key={opt.label}
                                     type="button"
                                     onClick={() =>
-                                      handleSelectOption(m.questions!, q.key, opt.value)
+                                      handleSelectOption(
+                                        m.questions!,
+                                        q.key,
+                                        opt.value,
+                                      )
                                     }
                                     className={
                                       selected
@@ -352,7 +390,12 @@ export default function LawnAssistant() {
                           !m.questions.every((q) => selectedAnswers[q.key]) && (
                             <button
                               type="button"
-                              onClick={() => sendSelectedAnswers(m.questions!, selectedAnswers)}
+                              onClick={() =>
+                                sendSelectedAnswers(
+                                  m.questions!,
+                                  selectedAnswers,
+                                )
+                              }
                               className="rounded-full bg-gold text-pine-dark text-xs font-semibold px-4 py-1.5 hover:bg-gold-light transition-colors"
                             >
                               Send answers
@@ -376,12 +419,16 @@ export default function LawnAssistant() {
               <div className="flex flex-col items-center gap-2 pt-2">
                 {SUGGESTIONS.map((s) => (
                   <button
-                    key={s}
+                    key={s.label}
                     type="button"
-                    onClick={() => sendMessage(s)}
+                    onClick={() =>
+                      s.questions
+                        ? startPreferenceFlow(s.label, s.questions)
+                        : sendMessage(s.label)
+                    }
                     className="w-full rounded-full border border-pine/15 bg-white/70 px-4 py-2 text-sm text-pine text-center hover:border-gold/50 hover:bg-white transition-colors"
                   >
-                    {s}
+                    {s.label}
                   </button>
                 ))}
                 <button
