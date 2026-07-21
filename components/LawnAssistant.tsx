@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Pest } from "@/lib/pests";
 import { fileToVisionJpeg } from "@/lib/image-client";
 import ChatProductCard from "./ChatProductCard";
 
@@ -39,8 +38,8 @@ type ChatMessage = {
   imageUrl?: string;
   products?: ChatProduct[];
   questions?: PreferenceQuestion[];
-  pest?: Pest | null;
-  controlProduct?: ChatControlProduct | null;
+  // Treatment cards for every pest identified this turn (deduped server-side).
+  controlProducts?: ChatControlProduct[];
 };
 
 type PendingImage = { previewUrl: string; base64: string };
@@ -208,8 +207,7 @@ export default function LawnAssistant() {
           content: data.reply,
           products: data.products,
           questions: data.questions,
-          pest: data.pest,
-          controlProduct: data.controlProduct,
+          controlProducts: data.controlProducts,
         },
       ]);
     } catch (err) {
@@ -279,18 +277,21 @@ export default function LawnAssistant() {
 
                   {m.content}
 
-                  {m.controlProduct && (
-                    <div className="mt-3">
-                      <ChatProductCard
-                        slug={m.controlProduct.slug}
-                        name={m.controlProduct.name}
-                        subtitle={m.controlProduct.description}
-                        price={m.controlProduct.price}
-                        priceLabel={`$${m.controlProduct.price.toFixed(2)}`}
-                        image={m.controlProduct.image}
-                        variantId={m.controlProduct.variantId}
-                        href={`/pest-control/${m.controlProduct.slug}`}
-                      />
+                  {m.controlProducts && m.controlProducts.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {m.controlProducts.map((cp) => (
+                        <ChatProductCard
+                          key={cp.slug}
+                          slug={cp.slug}
+                          name={cp.name}
+                          subtitle={cp.description}
+                          price={cp.price}
+                          priceLabel={`$${cp.price.toFixed(2)}`}
+                          image={cp.image}
+                          variantId={cp.variantId}
+                          href={`/pest-control/${cp.slug}`}
+                        />
+                      ))}
                     </div>
                   )}
 

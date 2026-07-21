@@ -33,14 +33,21 @@ export default function PestIdentificationPage() {
               className="rounded-2xl bg-white/60 border border-pine/10 p-6 md:p-8"
             >
               <div className="flex flex-col sm:flex-row gap-6">
-                <div className="relative w-full h-48 sm:w-40 sm:h-40 flex-shrink-0 rounded-xl overflow-hidden bg-pine/5">
-                  <Image
-                    src={pest.image.src}
-                    alt={pest.image.alt}
-                    fill
-                    sizes="(min-width: 640px) 160px, 100vw"
-                    className="object-cover"
-                  />
+                <div className="w-full sm:w-40 flex-shrink-0">
+                  <div className="relative w-full h-48 sm:h-40 rounded-xl overflow-hidden bg-pine/5">
+                    <Image
+                      src={pest.image.src}
+                      alt={pest.image.alt}
+                      fill
+                      sizes="(min-width: 640px) 160px, 100vw"
+                      className="object-cover"
+                    />
+                  </div>
+                  {pest.image.caption && (
+                    <p className="mt-1.5 text-[11px] leading-snug text-charcoal/50">
+                      {pest.image.caption}
+                    </p>
+                  )}
                 </div>
                 <div className="flex-1">
                   <h2 className="font-display text-xl text-pine mb-3">{pest.name}</h2>

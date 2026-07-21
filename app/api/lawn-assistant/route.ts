@@ -47,13 +47,22 @@ Once every preference is answered or marked not-sure (or the visitor doesn't wan
 ${pestGuide}
 
 When a photo is attached you'll also be given labeled reference photos of each pest's typical turf damage. Work like a careful turf expert:
-- If the photo clearly points to one pest — a visible close-up of the insect, or a distinctive sign like mole cricket tunnels and soil mounds, sod webworm or armyworm skeletonized/see-through blades, or spittlebug froth — identify it, call the identify_pest tool with that slug, then give the treatment. Judge by the pest or its telltale sign itself, NOT by whether the plant in the photo is grass: if you recognize one of these pests or its characteristic sign (e.g. spittlebug froth), identify it and treat it the same way even when it appears on a weed, ornamental, or other plant near the lawn rather than on turfgrass. These pests move onto turf, so an identification is still useful to the visitor.
-- IMPORTANT: chinch bugs, hunting billbugs, white grubs, and fall armyworms all produce nearly identical irregular brown, drought-like patches in a wide lawn photo. When the photo looks like that generic patchy damage and no insect is visible, do NOT guess a single pest. Instead, call the ask_pest_checks tool with every diagnostic check that would help distinguish the likely candidates — the visitor sees each as a tappable Yes / No / Not sure question. What each check points to when the answer is yes:
+- FIRST, AND MOST IMPORTANT: if an actual insect, larva, grub, or caterpillar is visible in the photo, identify it from the creature itself and call identify_pest right away. Do NOT ask diagnostic checks in this case — the checks exist only for when no insect is visible. A visible specimen is far stronger evidence than any damage-pattern question, so don't stall on it. Use these features to tell the look-alike larvae apart:
+   • Sod webworm larva: small (roughly 3/4 inch), pale green-brown to tan, with rows of small dark spots along the body; often curled in the thatch or in a silk-lined tunnel.
+   • Fall armyworm larva: noticeably larger (30-40mm), with a pale inverted "Y" on a dark head capsule and bold lengthwise stripes.
+   • White grub: C-shaped, cream/white, brown head, six visible front legs, found in soil.
+   • Mole cricket: over an inch, shovel-like front legs. Chinch bug: tiny, dark, white band across the back. Billbug: weevil with a long curved snout. Spittlebug: small dark insect, often with froth.
+  Also identify from an unmistakable sign even without the insect — mole cricket tunnels and soil mounds, or spittlebug froth. Judge by the pest or its telltale sign itself, NOT by whether the plant in the photo is grass: identify it the same way even when it appears on a weed, ornamental, or other plant near the lawn. These pests move onto turf, so the identification is still useful.
+- ONLY when no insect, larva, or unmistakable sign is visible anywhere in the photo: many of these pests produce similar-looking damage in a wide lawn shot — especially the irregular brown, drought-like patches shared by chinch bugs, hunting billbugs, white grubs, fall armyworms, and sometimes mole crickets. In that damage-only case, do NOT guess a single pest. Instead, call the ask_pest_checks tool with the diagnostic checks that would distinguish the candidates you're weighing — the visitor sees each as a tappable Yes / No / Not sure question. What each check points to when the answer is yes:
    • carpet-peel → white grubs
    • tug-test → hunting billbugs
    • hot-edges → chinch bugs
-   • sudden-spread → fall armyworms
-   Never write these checks out as prose questions — the buttons do that. Your text should briefly name the likely culprits and invite them to answer the quick checks below, mentioning that a close-up photo of any insect they can find also works. Their reply may be tapped answers (reading like "Yes — the dead patches peel back easily like a loose carpet. No — the grass resists when tugged.") or typed free text. Interpret the answers: a clear yes on a check points to its pest — call identify_pest with that slug and give the treatment. If the answers are all no / not-sure, or conflicting, say you can't confirm from this alone and ask for a close-up photo of any insect in the affected area.
+   • sudden-spread → fall armyworms (skeletonized + gradual instead → sod webworms)
+   • tunnels → mole crickets
+   • skeletonized → sod webworms or fall armyworms (use sudden-spread to split them)
+   • froth → spittlebugs
+   Only narrow the check list when the photo genuinely rules pests out (e.g. you can clearly see skeletonized blades and just need sudden-spread to split webworms from armyworms — ask 1-2 checks). Otherwise ask ALL the checks: a wide shot of brown, dying, or torn-up turf can NOT rule out mole crickets, spittlebugs, or sod webworms — their damage looks like generic patchiness from a distance too, and tunnels, froth, or skeletonizing are exactly the ground-level details a visitor can see that the photo doesn't show. Never write these checks out as prose questions — the buttons do that. Your text should briefly name the likely culprits and invite them to answer the quick checks below, mentioning that a close-up photo of any insect they can find also works. Their reply may be tapped answers (reading like "Yes — the dead patches peel back easily like a loose carpet. No — the grass resists when tugged.") or typed free text. Interpret the answers: a clear yes on a check points to its pest — call identify_pest with that slug and give the treatment. If several checks come back yes, weigh them together with the photo and pick the best-supported pest, or ask one brief clarifying question. If the answers are all no / not-sure, or conflicting, say you can't confirm from this alone and ask for a close-up photo of any insect in the affected area.
+- A photo or conversation can reveal MORE THAN ONE pest (separate problem areas, or two kinds of damage side by side). Identify every pest you're confident about: call identify_pest once per pest slug, in the same turn — each identified pest's treatment appears as its own card, so identifying only one of two pests loses the other's treatment.
 - Only when the photo matches none of these known pests or their signs at all, call identify_pest with "unknown". Do not answer "unknown" just because the pest or sign is on a non-grass plant.
 
 You may refer to the known pests above by name when explaining possibilities or asking a narrowing question. But never give a definitive identification until identify_pest has returned, and never invent or recall product facts from memory. If a tool returns no match, say so plainly rather than making something up.
@@ -150,6 +159,33 @@ const PEST_CHECK_QUESTIONS: Record<string, PreferenceQuestion> = {
       { label: "Yes", value: "Yes — the damage appeared suddenly and spread within days" },
       { label: "No", value: "No — the damage developed gradually" },
       { label: "Not sure", value: "Not sure how quickly the damage spread" },
+    ],
+  },
+  tunnels: {
+    key: "tunnels",
+    question: "Do you see raised, spongy tunnel tracks or small mounds of loose soil?",
+    options: [
+      { label: "Yes", value: "Yes — there are raised, spongy tunnel tracks or small soil mounds" },
+      { label: "No", value: "No — no tunnel tracks or soil mounds" },
+      { label: "Not sure", value: "Not sure about tunnels or soil mounds" },
+    ],
+  },
+  froth: {
+    key: "froth",
+    question: "Is there frothy, spit-like foam down in the grass or thatch?",
+    options: [
+      { label: "Yes", value: "Yes — there's frothy, spit-like foam in the grass" },
+      { label: "No", value: "No — no frothy foam anywhere" },
+      { label: "Not sure", value: "Not sure about frothy foam" },
+    ],
+  },
+  skeletonized: {
+    key: "skeletonized",
+    question: "Do individual grass blades look chewed thin or see-through (skeletonized)?",
+    options: [
+      { label: "Yes", value: "Yes — blades look chewed thin and see-through" },
+      { label: "No", value: "No — the blades aren't skeletonized" },
+      { label: "Not sure", value: "Not sure whether blades are skeletonized" },
     ],
   },
 };
@@ -372,8 +408,11 @@ export async function POST(req: NextRequest) {
     // Preference questions the model asked this turn, rendered by the widget
     // as tappable answer buttons.
     let askedQuestions: PreferenceQuestion[] = [];
-    let identifiedPest: (typeof pests)[number] | null = null;
-    let controlProduct: ControlCatalogProduct | null = null;
+    // A photo can show more than one pest — the model calls identify_pest once
+    // per slug, and each identification accumulates here. Treatments are
+    // deduped since several pests share a control product.
+    const identifiedPests: (typeof pests)[number][] = [];
+    const treatmentProducts: ControlCatalogProduct[] = [];
 
     for (let round = 0; data.stop_reason === "tool_use" && round < MAX_TOOL_ROUNDS; round++) {
       const toolUseBlocks = (
@@ -385,7 +424,15 @@ export async function POST(req: NextRequest) {
       const toolResults = await Promise.all(toolUseBlocks.map(async (block) => {
         if (block.name === "ask_preferences" || block.name === "ask_pest_checks") {
           const defs = block.name === "ask_preferences" ? PREFERENCE_QUESTIONS : PEST_CHECK_QUESTIONS;
-          const keys = (block.input?.questions ?? block.input?.checks ?? []) as string[];
+          let keys = (block.input?.questions ?? block.input?.checks ?? []) as string[];
+          // Backstop: asking 3+ pest checks signals broad uncertainty (not a
+          // targeted split between two candidates). In that case the model can't
+          // have truly ruled out the distinctive-sign pests either, so show the
+          // full check set — otherwise a mole cricket/spittlebug/webworm case
+          // has no button that can ever reach the right answer.
+          if (block.name === "ask_pest_checks" && keys.length >= 3) {
+            keys = Object.keys(PEST_CHECK_QUESTIONS);
+          }
           // Map to the fixed definitions, dropping unknowns and duplicates,
           // merging with any questions already asked this turn.
           const mapped = [...new Set(keys)].flatMap((k) => {
@@ -443,12 +490,16 @@ export async function POST(req: NextRequest) {
         if (block.name === "identify_pest") {
           const pestSlug = block.input?.pestSlug as string | undefined;
           const pest = pests.find((p) => p.slug === pestSlug) ?? null;
-          identifiedPest = pest;
           // Pull the treatment from Shopify (not the static fixture) so the
           // client gets the variant id + product image its Add to Cart card needs.
+          let product: ControlCatalogProduct | null = null;
           if (pest) {
+            if (!identifiedPests.some((p) => p.slug === pest.slug)) identifiedPests.push(pest);
             const controls = await getControlProducts();
-            controlProduct = controls.find((c) => c.slug === pest.controlSlug) ?? null;
+            product = controls.find((c) => c.slug === pest.controlSlug) ?? null;
+            if (product && !treatmentProducts.some((c) => c.slug === product?.slug)) {
+              treatmentProducts.push(product);
+            }
           }
 
           return {
@@ -457,12 +508,12 @@ export async function POST(req: NextRequest) {
             content: pest
               ? JSON.stringify({
                   pest: { slug: pest.slug, name: pest.name, damageSigns: pest.damageSigns },
-                  treatment: controlProduct
+                  treatment: product
                     ? {
-                        name: controlProduct.name,
-                        activeIngredient: controlProduct.activeIngredient,
-                        price: controlProduct.price,
-                        description: controlProduct.description,
+                        name: product.name,
+                        activeIngredient: product.activeIngredient,
+                        price: product.price,
+                        description: product.description,
                       }
                     : null,
                 })
@@ -495,16 +546,12 @@ export async function POST(req: NextRequest) {
         blocks: (data.content as Array<{ type: string }>)?.map((b) => b.type),
       });
 
-      // Cast back to the intended union: the values are only assigned inside the
-      // async tool-loop callback, so control-flow analysis otherwise narrows them
-      // to `never` here.
-      const pest = identifiedPest as (typeof pests)[number] | null;
-      const product = controlProduct as ControlCatalogProduct | null;
-
-      if (pest) {
-        reply = product
-          ? `That looks like ${pest.name}. ${pest.damageSigns} For treatment, ${product.name} ($${product.price.toFixed(2)}) works well — ${product.description}`
-          : `That looks like ${pest.name}. ${pest.damageSigns}`;
+      if (identifiedPests.length > 0) {
+        const names = identifiedPests.map((p) => p.name).join(" and ");
+        reply =
+          treatmentProducts.length > 0
+            ? `That looks like ${names}. The treatment${treatmentProducts.length > 1 ? "s" : ""} below will take care of it:`
+            : `That looks like ${names}.`;
       } else if (presented.length > 0 || recommended.length > 0) {
         reply = "Here are a few options that fit what you described:";
       } else if (askedQuestions.length > 0) {
@@ -521,8 +568,8 @@ export async function POST(req: NextRequest) {
       reply,
       products: presented.length > 0 ? presented : recommended,
       questions: askedQuestions,
-      pest: identifiedPest,
-      controlProduct,
+      pests: identifiedPests,
+      controlProducts: treatmentProducts,
     });
   } catch (err) {
     console.error("lawn-assistant route error:", err);

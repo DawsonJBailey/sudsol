@@ -4,7 +4,9 @@ export type Pest = {
   identification: string;
   damageSigns: string;
   controlSlug: string;
-  image: { src: string; alt: string };
+  // Optional caption shown under the photo on the guide page — use it when the
+  // pictured life stage isn't the one that damages turf (e.g. adult moth vs larva).
+  image: { src: string; alt: string; caption?: string };
   // Filename (in public/pest-examples/) of a photo showing this pest's damage
   // pattern on turf. Sent to the vision model as a labeled few-shot reference
   // so it can match a customer's lawn photo against real damage examples.
@@ -38,8 +40,9 @@ export const pests: Pest[] = [
       "Grass blades take on a thin, see-through, 'skeletonized' look where the caterpillars have chewed through the surface layer.",
     controlSlug: "clearlawn-spinosad",
     image: {
-      src: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Sod_Webworm_-_Pediasia_trisecta%2C_Woodbridge%2C_Virginia.jpg/960px-Sod_Webworm_-_Pediasia_trisecta%2C_Woodbridge%2C_Virginia.jpg",
-      alt: "A sod webworm moth (Pediasia trisecta) resting with wings folded",
+      src: "/pests/sod-webworms-larva.jpg",
+      alt: "A pale sod webworm caterpillar with rows of dark spots, curled in lawn thatch",
+      caption: "The larva is the turf-damaging stage — adults are small tan moths",
     },
     damageExample: {
       file: "sod-webworms-damage.jpg",
