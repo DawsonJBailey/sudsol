@@ -1,24 +1,54 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import type { Product } from "@/lib/data";
-import type { Pest, ControlProduct } from "@/lib/pests";
+import type { Pest } from "@/lib/pests";
+import { fileToVisionJpeg } from "@/lib/image-client";
+import ChatProductCard from "./ChatProductCard";
+
+// Products/treatments the API returns to the client carry the Shopify variant id
+// and image the Add to Cart cards need — richer than the base Product type.
+type ChatProduct = {
+  slug: string;
+  name: string;
+  tagline: string;
+  priceFrom: number;
+  image: { src: string; alt: string };
+  variantId: string;
+};
+
+type ChatControlProduct = {
+  slug: string;
+  name: string;
+  price: number;
+  description: string;
+  image: { src: string; alt: string };
+  variantId: string;
+};
+
+// A preference question the bot asked, rendered as tappable answer buttons.
+// Definitions come from the API (fixed server-side), never parsed from prose.
+type PreferenceQuestion = {
+  key: string;
+  question: string;
+  options: { label: string; value: string }[];
+};
 
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   imageUrl?: string;
-  products?: Product[];
+  products?: ChatProduct[];
+  questions?: PreferenceQuestion[];
   pest?: Pest | null;
-  controlProduct?: ControlProduct | null;
+  controlProduct?: ChatControlProduct | null;
 };
 
 type PendingImage = { previewUrl: string; base64: string };
 
 const GREETING: ChatMessage = {
   role: "assistant",
-  content: "Hi! I can help with lawn care, products, and how-tos. Choose a suggestion or type below.",
+  content:
+    "Hi! I can help with lawn care, products, and how-tos. Choose a suggestion or type below.",
 };
 
 const SUGGESTIONS = [
@@ -26,34 +56,96 @@ const SUGGESTIONS = [
   "How do I fix brown or thin spots?",
   "Help me plan a fertilizer schedule",
   "Sod vs seed for my yard - what should I pick?",
-  "Where can I shop lawn products?",
+  // "Where can I shop lawn products?",
 ];
+
+// Pest identification is handled locally rather than as an API call: clicking it
+// just prompts the visitor for a photo, which they then attach via the 📷 button.
+const PEST_ID_LABEL = "Pest Identification";
+const PEST_ID_REPLY =
+  "Happy to help identify it. Tap the 📷 button below and upload a clear photo of either the bug itself or the affected patch of lawn, and I'll take a look.";
 
 export default function LawnAssistant() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
   const [input, setInput] = useState("");
   const [pendingImage, setPendingImage] = useState<PendingImage | null>(null);
+  // Tapped answers for the latest bot question set, keyed by question key.
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth",
+    });
   }, [messages, loading]);
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      const base64 = dataUrl.split(",")[1] ?? "";
+    try {
+      // Re-encode to a clean JPEG so any browser-viewable format works.
+      const { dataUrl, base64 } = await fileToVisionJpeg(file);
       setPendingImage({ previewUrl: dataUrl, base64 });
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            err instanceof Error
+              ? err.message
+              : "I couldn't read that image. Try a different photo.",
+        },
+      ]);
+    }
+  }
+
+  // Compose the tapped answers into a plain-text visitor reply (the model
+  // handles it exactly like a typed sentence) and send it.
+  function sendSelectedAnswers(questions: PreferenceQuestion[], answers: Record<string, string>) {
+    const parts = questions.flatMap((q) => (answers[q.key] ? [answers[q.key]] : []));
+    if (parts.length === 0) return;
+    setSelectedAnswers({});
+    sendMessage(parts.join(". ") + ".");
+  }
+
+  function handleSelectOption(
+    questions: PreferenceQuestion[],
+    questionKey: string,
+    value: string
+  ) {
+    if (loading) return;
+    const next = { ...selectedAnswers, [questionKey]: value };
+    setSelectedAnswers(next);
+    // Auto-send the moment every question has an answer — no extra click.
+    if (questions.every((q) => next[q.key])) {
+      sendSelectedAnswers(questions, next);
+    }
+  }
+
+  // Reset the conversation to its initial state (greeting + suggestions).
+  function startNewChat() {
+    if (loading) return;
+    setMessages([GREETING]);
+    setInput("");
+    setPendingImage(null);
+    setSelectedAnswers({});
+  }
+
+  function startPestIdentification() {
+    if (loading) return;
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: PEST_ID_LABEL },
+      { role: "assistant", content: PEST_ID_REPLY },
+    ]);
+    setInput("");
   }
 
   async function sendMessage(text: string) {
@@ -99,17 +191,23 @@ export default function LawnAssistant() {
       if (!res.ok) {
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: data.error ?? "Something went wrong. Try again in a moment." },
+          {
+            role: "assistant",
+            content:
+              data.error ?? "Something went wrong. Try again in a moment.",
+          },
         ]);
         return;
       }
 
+      setSelectedAnswers({});
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
           content: data.reply,
           products: data.products,
+          questions: data.questions,
           pest: data.pest,
           controlProduct: data.controlProduct,
         },
@@ -118,7 +216,10 @@ export default function LawnAssistant() {
       console.error(err);
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Couldn't reach the assistant. Try again in a moment." },
+        {
+          role: "assistant",
+          content: "Couldn't reach the assistant. Try again in a moment.",
+        },
       ]);
     } finally {
       setLoading(false);
@@ -131,18 +232,36 @@ export default function LawnAssistant() {
         <div className="mb-3 w-[min(23rem,calc(100vw-2.5rem))] h-[min(32rem,calc(100vh-8rem))] flex flex-col rounded-2xl bg-parchment border border-pine/15 shadow-2xl overflow-hidden">
           <div className="flex items-center justify-between bg-pine text-parchment px-4 py-3">
             <span className="font-display text-lg">Lawn Care Assistant</span>
-            <button
-              onClick={() => setOpen(false)}
-              aria-label="Close chat"
-              className="text-parchment/80 hover:text-parchment text-xl leading-none px-1"
-            >
-              ×
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={startNewChat}
+                disabled={loading}
+                aria-label="Start a new chat"
+                className="rounded-full border border-parchment/30 text-parchment/90 text-xs font-medium px-2.5 py-1 hover:bg-parchment/10 hover:text-parchment transition-colors disabled:opacity-50"
+              >
+                New chat
+              </button>
+              <button
+                onClick={() => setOpen(false)}
+                aria-label="Close chat"
+                className="text-parchment/80 hover:text-parchment text-xl leading-none px-1"
+              >
+                ×
+              </button>
+            </div>
           </div>
 
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+          <div
+            ref={scrollRef}
+            className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
+          >
             {messages.map((m, i) => (
-              <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+              <div
+                key={i}
+                className={
+                  m.role === "user" ? "flex justify-end" : "flex justify-start"
+                }
+              >
                 <div
                   className={
                     m.role === "user"
@@ -160,38 +279,86 @@ export default function LawnAssistant() {
 
                   {m.content}
 
-                  {m.pest && (
-                    <div className="mt-3 rounded-xl bg-parchment border border-pine/10 px-3 py-2">
-                      <p className="font-medium text-pine text-sm">{m.pest.name}</p>
-                      <p className="text-xs text-charcoal/60 mt-0.5">{m.pest.damageSigns}</p>
-                      {m.controlProduct && (
-                        <Link
-                          href={`/pest-control/${m.controlProduct.slug}`}
-                          className="inline-block mt-2 text-xs font-medium text-gold hover:underline"
-                        >
-                          View {m.controlProduct.name} →
-                        </Link>
-                      )}
+                  {m.controlProduct && (
+                    <div className="mt-3">
+                      <ChatProductCard
+                        slug={m.controlProduct.slug}
+                        name={m.controlProduct.name}
+                        subtitle={m.controlProduct.description}
+                        price={m.controlProduct.price}
+                        priceLabel={`$${m.controlProduct.price.toFixed(2)}`}
+                        image={m.controlProduct.image}
+                        variantId={m.controlProduct.variantId}
+                        href={`/pest-control/${m.controlProduct.slug}`}
+                      />
                     </div>
                   )}
 
                   {m.products && m.products.length > 0 && (
                     <div className="mt-3 space-y-2">
                       {m.products.map((p) => (
-                        <Link
+                        <ChatProductCard
                           key={p.slug}
+                          slug={p.slug}
+                          name={p.name}
+                          subtitle={p.tagline}
+                          price={p.priceFrom}
+                          priceLabel={`From $${p.priceFrom.toFixed(2)}`}
+                          image={p.image}
+                          variantId={p.variantId}
                           href={`/product/${p.slug}`}
-                          className="block rounded-xl bg-parchment border border-pine/10 px-3 py-2 hover:border-gold/50 transition-colors"
-                        >
-                          <p className="font-medium text-pine text-sm">{p.name}</p>
-                          <p className="text-xs text-charcoal/60 mt-0.5">{p.tagline}</p>
-                          <p className="text-xs font-semibold text-charcoal mt-1">
-                            From ${p.priceFrom.toFixed(2)}
-                          </p>
-                        </Link>
+                        />
                       ))}
                     </div>
                   )}
+
+                  {/* Tappable answer buttons — only on the latest message, so
+                      they disappear once the visitor replies (tap or typed). */}
+                  {m.questions &&
+                    m.questions.length > 0 &&
+                    i === messages.length - 1 &&
+                    !loading && (
+                      <div className="mt-3 space-y-3">
+                        {m.questions.map((q) => (
+                          <div key={q.key}>
+                            <p className="text-xs font-medium text-charcoal/60 mb-1.5">
+                              {q.question}
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {q.options.map((opt) => {
+                                const selected = selectedAnswers[q.key] === opt.value;
+                                return (
+                                  <button
+                                    key={opt.label}
+                                    type="button"
+                                    onClick={() =>
+                                      handleSelectOption(m.questions!, q.key, opt.value)
+                                    }
+                                    className={
+                                      selected
+                                        ? "rounded-full bg-pine text-parchment text-xs font-medium px-3 py-1.5 transition-colors"
+                                        : "rounded-full border border-pine/20 bg-white text-pine text-xs font-medium px-3 py-1.5 hover:border-gold/60 transition-colors"
+                                    }
+                                  >
+                                    {opt.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                        {Object.keys(selectedAnswers).length > 0 &&
+                          !m.questions.every((q) => selectedAnswers[q.key]) && (
+                            <button
+                              type="button"
+                              onClick={() => sendSelectedAnswers(m.questions!, selectedAnswers)}
+                              className="rounded-full bg-gold text-pine-dark text-xs font-semibold px-4 py-1.5 hover:bg-gold-light transition-colors"
+                            >
+                              Send answers
+                            </button>
+                          )}
+                      </div>
+                    )}
                 </div>
               </div>
             ))}
@@ -216,6 +383,13 @@ export default function LawnAssistant() {
                     {s}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={startPestIdentification}
+                  className="w-full rounded-full border border-pine/15 bg-white/70 px-4 py-2 text-sm text-pine text-center hover:border-gold/50 hover:bg-white transition-colors"
+                >
+                  {PEST_ID_LABEL}
+                </button>
               </div>
             )}
           </div>
@@ -282,7 +456,9 @@ export default function LawnAssistant() {
 
       <button
         onClick={() => setOpen((v) => !v)}
-        aria-label={open ? "Close lawn care assistant" : "Open lawn care assistant"}
+        aria-label={
+          open ? "Close lawn care assistant" : "Open lawn care assistant"
+        }
         className="w-14 h-14 rounded-full bg-pine text-parchment shadow-xl flex items-center justify-center hover:bg-pine-dark transition-colors text-2xl"
       >
         {open ? "×" : "💬"}

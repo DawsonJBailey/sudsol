@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 import { pests, controlProducts } from "@/lib/pests";
+import { fileToVisionJpeg } from "@/lib/image-client";
 
 type Result = { pestSlug: string; confidence: number; reasoning: string };
 
@@ -13,18 +14,20 @@ export default function PestIdentifierPage() {
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setResult(null);
     setError(null);
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    try {
+      // Re-encode to a clean JPEG so any browser-viewable format works.
+      const { dataUrl } = await fileToVisionJpeg(file);
+      setPreview(dataUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not read that image.");
+    }
   }
 
   async function handleIdentify() {
